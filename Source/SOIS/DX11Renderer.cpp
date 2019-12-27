@@ -4,7 +4,7 @@
 #include "imgui_impl_sdl.h"
 #include "imgui_impl_dx11.h"
 
-#include "DX11Renderer.hpp"
+#include "SOIS/DX11Renderer.hpp"
 
 namespace SOIS
 {

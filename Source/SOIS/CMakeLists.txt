@@ -1,0 +1,11 @@
+target_sources(SOIS 
+PRIVATE
+    ImGuiSample.hpp
+    ApplicationContext.cpp
+    ApplicationContext.hpp
+    OpenGL3Renderer.cpp
+    OpenGL3Renderer.hpp
+    DX11Renderer.cpp
+    DX11Renderer.hpp
+    Renderer.hpp
+)

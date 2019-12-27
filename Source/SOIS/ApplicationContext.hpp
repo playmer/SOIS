@@ -9,7 +9,7 @@
 
 #include "glm/glm.hpp"
 
-#include "Renderer.hpp"
+#include "SOIS/Renderer.hpp"
 
 namespace SOIS
 {

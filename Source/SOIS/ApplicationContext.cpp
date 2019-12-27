@@ -7,10 +7,10 @@
 #include "imgui_impl_sdl.h"
 #include "imgui_freetype.h"
 
-#include "ApplicationContext.hpp"
+#include "SOIS/ApplicationContext.hpp"
 
-#include "DX11Renderer.hpp"
-#include "OpenGL3Renderer.hpp"
+#include "SOIS/DX11Renderer.hpp"
+#include "SOIS/OpenGL3Renderer.hpp"
 
 namespace SOIS
 {

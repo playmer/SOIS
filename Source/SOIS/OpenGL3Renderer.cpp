@@ -7,7 +7,7 @@
 #include "imgui_impl_sdl.h"
 #include "imgui_impl_opengl3.h"
 
-#include "OpenGL3Renderer.hpp"
+#include "SOIS/OpenGL3Renderer.hpp"
 
 namespace SOIS
 {

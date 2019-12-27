@@ -3,7 +3,7 @@
 
 #include <SDL.h> // Include glfw3.h after our OpenGL definitions
 
-#include "Renderer.hpp"
+#include "SOIS/Renderer.hpp"
 
 namespace SOIS
 {

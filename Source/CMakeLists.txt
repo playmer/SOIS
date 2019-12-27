@@ -1,27 +1,18 @@
-add_library(SimpleSDL2ImguiAppFramework)
+add_library(SOIS)
 
-target_sources(SimpleSDL2ImguiAppFramework 
-PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/ImGuiSample.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/ApplicationContext.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/ApplicationContext.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/OpenGL3Renderer.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/OpenGL3Renderer.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/DX11Renderer.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/DX11Renderer.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/Renderer.hpp
+add_subdirectory(SOIS)
+
+target_include_directories(SOIS 
+PUBLIC 
+    ${CMAKE_CURRENT_LIST_DIR}
+    ${DependenciesDirectory}/glm
 )
 
-target_include_directories(SimpleSDL2ImguiAppFramework 
-PRIVATE 
-    ${CMAKE_CURRENT_LIST_DIR}
-    ${DependenciesDirectory}/glm)
-
-target_link_libraries(SimpleSDL2ImguiAppFramework 
-PRIVATE 
+target_link_libraries(SOIS 
+PUBLIC 
     SDL2-static
     SDL2main
-    glm_static
+    glm::glm
     imgui
     imgui_node_editor
     STB
@@ -30,17 +21,15 @@ PRIVATE
     D3D11.lib
 )
 
-target_compile_definitions(SimpleSDL2ImguiAppFramework PRIVATE GLFW_INCLUDE_NONE)
+target_compile_definitions(SOIS PRIVATE GLFW_INCLUDE_NONE)
 
 if (${CMAKE_CXX_COMPILER_ID} STREQUAL MSVC)
-    target_link_libraries(SimpleSDL2ImguiAppFramework PRIVATE opengl32.lib)
+    target_link_libraries(SOIS PRIVATE opengl32.lib)
 
-    target_compile_options(SimpleSDL2ImguiAppFramework PRIVATE 
+    target_compile_options(SOIS PRIVATE 
     PUBLIC
         -permissive- -std:c++17
     PRIVATE
         -WX- -W4
     )
 endif()
-
-set_target_properties(SimpleSDL2ImguiAppFramework PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${AssetDirectory}/Bin)
