@@ -233,12 +233,12 @@ namespace SOIS
     mRenderer->NewFrame();
     ImGui_ImplSDL2_NewFrame(mWindow);
     ImGui::NewFrame();
+    
+    mRenderer->ClearRenderTarget(mClearColor);
   }
 
   void ApplicationContext::EndFrame()
   {
-    mRenderer->ClearRenderTarget(mClearColor);
-
     // Rendering Dear ImGui.
     ImGui::Render();
     mRenderer->RenderImguiData();

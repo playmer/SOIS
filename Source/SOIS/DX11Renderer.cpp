@@ -27,13 +27,19 @@ namespace SOIS
     sd.SampleDesc.Count = 1;
     sd.SampleDesc.Quality = 0;
     sd.Windowed = TRUE;
-    sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; //DXGI_SWAP_EFFECT_DISCARD;
 
     UINT createDeviceFlags = 0;
+    
+    // If the project is in a debug build, enable the debug layer.
+    #if !defined(NDEBUG)
+      createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    #endif
+
     //createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
     D3D_FEATURE_LEVEL featureLevel;
     const D3D_FEATURE_LEVEL featureLevelArray[2] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0, };
-    if (D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, createDeviceFlags, featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &mSwapChain, &mD3DDevice, &featureLevel, &mD3DDeviceContext) != S_OK)
+    if (D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, createDeviceFlags, featureLevelArray, 2, D3D11_SDK_VERSION, &sd, mSwapChain.put(), mD3DDevice.put(), &featureLevel, mD3DDeviceContext.put()) != S_OK)
     {
       throw "Bad device and swapchain";
       return false;
@@ -46,9 +52,9 @@ namespace SOIS
   void DX11Renderer::CleanupDeviceD3D()
   {
     CleanupRenderTarget();
-    if (mSwapChain) { mSwapChain->Release(); mSwapChain = NULL; }
-    if (mD3DDeviceContext) { mD3DDeviceContext->Release(); mD3DDeviceContext = NULL; }
-    if (mD3DDevice) { mD3DDevice->Release(); mD3DDevice = NULL; }
+    mSwapChain = nullptr;
+    mD3DDeviceContext = nullptr;
+    mD3DDevice = nullptr;
   }
 
   void DX11Renderer::CreateRenderTarget()
@@ -87,7 +93,7 @@ namespace SOIS
     }
 
     ImGui_ImplSDL2_InitForD3D(mWindow);
-    ImGui_ImplDX11_Init(mD3DDevice, mD3DDeviceContext);
+    ImGui_ImplDX11_Init(mD3DDevice.get(), mD3DDeviceContext.get());
   }
 
 

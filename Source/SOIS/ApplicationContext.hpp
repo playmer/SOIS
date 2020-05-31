@@ -50,6 +50,11 @@ namespace SOIS
 
     void SetCallbackInfo(EventHandler aHandler, void* aUserData);
 
+    Renderer* GetRenderer()
+    {
+        return mRenderer.get();
+    }
+
   private:
     void BeginFrame();
     void EndFrame();

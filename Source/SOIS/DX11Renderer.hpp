@@ -1,6 +1,7 @@
 #pragma once
 
 #define NOMINMAX
+#include <winrt/base.h>
 #include <d3d11.h>
 
 #include <SDL.h> // Include glfw3.h after our OpenGL definitions
@@ -24,15 +25,16 @@ namespace SOIS
     void RenderImguiData() override;
     void Present() override;
 
-  private:
+
+    // Ostensibly private
     bool CreateDeviceD3D(HWND hWnd);
     void CreateRenderTarget();
     void CleanupDeviceD3D();
     void CleanupRenderTarget();
 
-    ID3D11Device* mD3DDevice = nullptr;
-    ID3D11DeviceContext* mD3DDeviceContext = nullptr;
-    IDXGISwapChain* mSwapChain = nullptr;
+    winrt::com_ptr<ID3D11Device> mD3DDevice = nullptr;
+    winrt::com_ptr<ID3D11DeviceContext> mD3DDeviceContext = nullptr;
+    winrt::com_ptr<IDXGISwapChain> mSwapChain = nullptr;
     ID3D11RenderTargetView* mMainRenderTargetView = nullptr;
     SDL_Window* mWindow = nullptr;
   };
