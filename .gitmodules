@@ -16,3 +16,6 @@
 [submodule "Dependencies/ImGuiSource"]
 	path = Dependencies/ImGuiSource
 	url = https://github.com/ocornut/imgui.git
+[submodule "Dependencies/ImGuizmo"]
+	path = Dependencies/ImGuizmo
+	url = https://github.com/CedricGuillemet/ImGuizmo.git

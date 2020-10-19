@@ -61,7 +61,24 @@ target_include_directories(imgui
         ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiSource/misc/cpp/
         ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiSource/examples/
 )
+
 target_link_libraries(imgui PUBLIC STB SDL2-static glbinding freetype)
+
+#####################################
+# ImGuizmo
+#####################################
+add_library(imguizmo
+    ImGuizmo/ImCurveEdit.cpp
+    ImGuizmo/ImCurveEdit.h
+    ImGuizmo/ImGradient.cpp
+    ImGuizmo/ImGradient.h
+    ImGuizmo/ImGuizmo.cpp
+    ImGuizmo/ImGuizmo.h
+    ImGuizmo/ImSequencer.cpp
+    ImGuizmo/ImSequencer.h
+)
+
+target_link_libraries(imguizmo PUBLIC imgui)
 
 add_subdirectory(STB)
 add_subdirectory(imgui_node_editor)

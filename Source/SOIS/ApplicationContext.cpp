@@ -36,8 +36,15 @@ namespace SOIS
     , mRunning{ true }
 
   {
-    mRenderer = std::make_unique<DX11Renderer>();
-    //mRenderer = std::make_unique<OpenGL3Renderer>();
+    switch (aConfig.aPreferredRenderer)
+    {
+      case PreferredRenderer::DirectX11: 
+        mRenderer = std::make_unique<DX11Renderer>();
+        break;
+      case PreferredRenderer::OpenGL3_3: 
+        mRenderer = std::make_unique<OpenGL3Renderer>();
+        break;
+    }
 
     if (nullptr == aConfig.aWindowName)
     {

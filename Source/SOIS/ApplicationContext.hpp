@@ -18,19 +18,25 @@ namespace SOIS
   
   using EventHandler = void(*)(SDL_Event&, void*);
 
+  enum PreferredRenderer
+  {
+    OpenGL3_3,
+    DirectX11
+  };
+
   struct ApplicationContextConfig
   {
     char const* aWindowName = nullptr;
     char const* aIniFile = nullptr;
     EventHandler aHandler = nullptr;
     void* aUserData = nullptr;
+    PreferredRenderer aPreferredRenderer;
     bool aBlocking = false;
   };
 
   struct ApplicationContext
   {
   public:
-
     SDL_Window* mWindow;
     glm::vec4 mClearColor;
 
