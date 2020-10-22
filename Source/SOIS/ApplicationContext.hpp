@@ -15,17 +15,22 @@ namespace SOIS
 {
   // Call only once, loads OpenGL function pointers and other such work.
   void ApplicationInitialization();
+  
+  using EventHandler = void(*)(SDL_Event&, void*);
 
   struct ApplicationContextConfig
   {
     char const* aWindowName = nullptr;
     char const* aIniFile = nullptr;
+    EventHandler aHandler = nullptr;
+    void* aUserData = nullptr;
     bool aBlocking = false;
   };
 
   struct ApplicationContext
   {
   public:
+
     SDL_Window* mWindow;
     glm::vec4 mClearColor;
 
@@ -43,6 +48,8 @@ namespace SOIS
     // Call when you want the application to end.
     void EndApplication();
 
+    void SetCallbackInfo(EventHandler aHandler, void* aUserData);
+
   private:
     void BeginFrame();
     void EndFrame();
@@ -51,6 +58,8 @@ namespace SOIS
 
     std::vector<SDL_Event> mEvents;
     std::unique_ptr<Renderer> mRenderer;
+    EventHandler mHandler;
+    void* mUserData;
 
     std::chrono::time_point<std::chrono::high_resolution_clock> mBegin;
     std::chrono::time_point<std::chrono::high_resolution_clock> mLastFrame;

@@ -17,16 +17,20 @@ namespace SOIS
   void ApplicationInitialization()
   {
     // Setup SDL
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0)
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
     {
       printf("Error: %s\n", SDL_GetError());
       exit(-1);
     }
+
+    SDL_GameControllerEventState(SDL_ENABLE);
   }
 
   ApplicationContext::ApplicationContext(ApplicationContextConfig aConfig)
     : mWindow{nullptr}
     , mClearColor{.22f,.22f,.65f,1.0f}
+    , mHandler{ aConfig.aHandler }
+    , mUserData{ aConfig.aUserData }
     , mFrame{ 0 }
     , mBlocking{ aConfig.aBlocking }
     , mRunning{ true }
@@ -101,6 +105,12 @@ namespace SOIS
 
     SDL_DestroyWindow(mWindow);
     SDL_Quit();
+  }
+  
+  void ApplicationContext::SetCallbackInfo(EventHandler aHandler, void* aUserData)
+  {
+    mHandler = aHandler;
+    mUserData = aUserData;
   }
 
 
@@ -187,6 +197,11 @@ namespace SOIS
     for (auto& event : mEvents)
     {
       ImGui_ImplSDL2_ProcessEvent(&event);
+
+      if (nullptr != mHandler)
+      {
+        mHandler(event, mUserData);
+      }
 
       if (event.type == SDL_QUIT)
       {
