@@ -1,0 +1,15 @@
+[submodule "Dependencies/glbinding"]
+	path = Dependencies/glbinding
+	url = https://github.com/cginternals/glbinding.git
+[submodule "Dependencies/glm"]
+	path = Dependencies/glm
+	url = https://github.com/g-truc/glm.git
+[submodule "Dependencies/SDL"]
+	path = Dependencies/SDL
+	url = https://github.com/playmer/SDL.git
+[submodule "Dependencies/freetype2"]
+	path = Dependencies/freetype2
+	url = git://git.sv.nongnu.org/freetype/freetype2.git
+[submodule "Dependencies/nativefiledialog/repo"]
+	path = Dependencies/nativefiledialog/repo
+	url = https://github.com/mlabbe/nativefiledialog.git
