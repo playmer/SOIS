@@ -13,3 +13,6 @@
 [submodule "Dependencies/nativefiledialog/repo"]
 	path = Dependencies/nativefiledialog/repo
 	url = https://github.com/mlabbe/nativefiledialog.git
+[submodule "Dependencies/ImGuiSource"]
+	path = Dependencies/ImGuiSource
+	url = https://github.com/ocornut/imgui.git
