@@ -32,6 +32,8 @@ namespace SOIS
     void CleanupDeviceD3D();
     void CleanupRenderTarget();
 
+    std::unique_ptr<Texture> LoadTextureFromFile(std::string const& aFile) override;
+
     winrt::com_ptr<ID3D11Device> mD3DDevice = nullptr;
     winrt::com_ptr<ID3D11DeviceContext> mD3DDeviceContext = nullptr;
     winrt::com_ptr<IDXGISwapChain> mSwapChain = nullptr;

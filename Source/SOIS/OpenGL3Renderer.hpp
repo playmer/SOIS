@@ -23,6 +23,8 @@ namespace SOIS
     void ClearRenderTarget(glm::vec4 aClearColor) override;
     void RenderImguiData() override;
     void Present() override;
+    
+    std::unique_ptr<Texture> LoadTextureFromFile(std::string const& aFile) override;
 
   private:
     SDL_GLContext mContext;

@@ -178,4 +178,23 @@ namespace SOIS
     SDL_GL_SwapWindow(mWindow);
 
   }
+
+  class OpenGL3Texture : public Texture
+  {
+  public:
+      OpenGL3Texture(int aWidth, int aHeight)
+          : Texture{ aWidth, aHeight }
+      {
+
+      }
+
+      ~OpenGL3Texture() override
+      {
+      }
+  };
+  
+  std::unique_ptr<Texture> OpenGL3Renderer::LoadTextureFromFile(std::string const& aFile)
+  {
+      return nullptr;
+  }
 }

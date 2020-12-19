@@ -38,11 +38,12 @@ namespace SOIS
   {
     switch (aConfig.aPreferredRenderer)
     {
-      case PreferredRenderer::DirectX11: 
-        mRenderer = std::make_unique<DX11Renderer>();
-        break;
       case PreferredRenderer::OpenGL3_3: 
         mRenderer = std::make_unique<OpenGL3Renderer>();
+        break;
+      case PreferredRenderer::DirectX11: 
+      default:
+        mRenderer = std::make_unique<DX11Renderer>();
         break;
     }
 

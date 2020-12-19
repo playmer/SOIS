@@ -4,6 +4,8 @@
 #include "imgui_impl_sdl.h"
 #include "imgui_impl_dx11.h"
 
+#include <stb_image.h>
+
 #include "SOIS/DX11Renderer.hpp"
 
 namespace SOIS
@@ -129,5 +131,73 @@ namespace SOIS
   void DX11Renderer::Present()
   {
     mSwapChain->Present(1, 0); // Present with vsync
+  }
+
+  class DX11Texture : public Texture
+  {
+  public:
+      DX11Texture(winrt::com_ptr<ID3D11ShaderResourceView> aShaderResourceView, int aWidth, int aHeight)
+          : Texture{ aWidth, aHeight }
+          , ShaderResourceView{aShaderResourceView}
+      {
+
+      }
+
+      ~DX11Texture() override
+      {
+      }
+      
+      virtual void* GetTextureId()
+      {
+          return ShaderResourceView.get();
+      }
+
+      winrt::com_ptr<ID3D11ShaderResourceView> ShaderResourceView;
+  };
+  
+  std::unique_ptr<Texture> DX11Renderer::LoadTextureFromFile(std::string const& aFile)
+  {
+    // Load from disk into a raw RGBA buffer
+    int image_width = 0;
+    int image_height = 0;
+    unsigned char* image_data = stbi_load(aFile.c_str(), &image_width, &image_height, NULL, 4);
+    if (image_data == NULL)
+        return nullptr;
+
+    // Create texture
+    D3D11_TEXTURE2D_DESC desc;
+    ZeroMemory(&desc, sizeof(desc));
+    desc.Width = image_width;
+    desc.Height = image_height;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    desc.CPUAccessFlags = 0;
+
+    ID3D11Texture2D *pTexture = NULL;
+    D3D11_SUBRESOURCE_DATA subResource;
+    subResource.pSysMem = image_data;
+    subResource.SysMemPitch = desc.Width * 4;
+    subResource.SysMemSlicePitch = 0;
+    mD3DDevice->CreateTexture2D(&desc, &subResource, &pTexture);
+
+    // Create texture view
+    winrt::com_ptr<ID3D11ShaderResourceView> shaderResourceView;
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+    ZeroMemory(&srvDesc, sizeof(srvDesc));
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = desc.MipLevels;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    mD3DDevice->CreateShaderResourceView(pTexture, &srvDesc, shaderResourceView.put());
+    pTexture->Release();
+    
+    stbi_image_free(image_data);
+    auto texture = std::make_unique<DX11Texture>(shaderResourceView, image_width, image_height);
+
+    return std::unique_ptr<Texture>(texture.release());
   }
 }
