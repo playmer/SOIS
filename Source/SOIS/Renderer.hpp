@@ -44,7 +44,9 @@ namespace SOIS
 
     virtual void NewFrame() = 0;
     virtual void ResizeRenderTarget(unsigned int aWidth, unsigned int aHeight) = 0;
-
+    
+    
+    virtual std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, int format, int w, int h, int pitch) = 0;
     virtual std::unique_ptr<Texture> LoadTextureFromFile(std::string const& aFile) = 0;
 
     virtual void ClearRenderTarget(glm::vec4 aClearColor) = 0;

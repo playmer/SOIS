@@ -193,6 +193,11 @@ namespace SOIS
       }
   };
   
+  std::unique_ptr<Texture> OpenGL3Renderer::LoadTextureFromData(unsigned char* data, int format, int w, int h, int pitch)
+  {
+      return nullptr;
+  }
+
   std::unique_ptr<Texture> OpenGL3Renderer::LoadTextureFromFile(std::string const& aFile)
   {
       return nullptr;

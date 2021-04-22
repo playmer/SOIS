@@ -154,6 +154,44 @@ namespace SOIS
 
       winrt::com_ptr<ID3D11ShaderResourceView> ShaderResourceView;
   };
+
+  std::unique_ptr<Texture> DX11Renderer::LoadTextureFromData(unsigned char* data, int format, int w, int h, int pitch)
+  {
+    // Create texture
+    D3D11_TEXTURE2D_DESC desc;
+    ZeroMemory(&desc, sizeof(desc));
+    desc.Width = w;
+    desc.Height = h;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = (DXGI_FORMAT)format;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    desc.CPUAccessFlags = 0;
+
+    ID3D11Texture2D *pTexture = NULL;
+    D3D11_SUBRESOURCE_DATA subResource;
+    subResource.pSysMem = data;
+    subResource.SysMemPitch = pitch;
+    subResource.SysMemSlicePitch = 0;
+    mD3DDevice->CreateTexture2D(&desc, &subResource, &pTexture);
+
+    // Create texture view
+    winrt::com_ptr<ID3D11ShaderResourceView> shaderResourceView;
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+    ZeroMemory(&srvDesc, sizeof(srvDesc));
+    srvDesc.Format = (DXGI_FORMAT)format;
+    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = desc.MipLevels;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    mD3DDevice->CreateShaderResourceView(pTexture, &srvDesc, shaderResourceView.put());
+    pTexture->Release();
+    
+    auto texture = std::make_unique<DX11Texture>(shaderResourceView, w, h);
+
+    return std::unique_ptr<Texture>(texture.release());
+  }
   
   std::unique_ptr<Texture> DX11Renderer::LoadTextureFromFile(std::string const& aFile)
   {
