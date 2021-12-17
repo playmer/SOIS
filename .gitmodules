@@ -19,3 +19,6 @@
 [submodule "Dependencies/ImGuizmo"]
 	path = Dependencies/ImGuizmo
 	url = https://github.com/CedricGuillemet/ImGuizmo.git
+[submodule "Dependencies/DirectX-Headers"]
+	path = Dependencies/DirectX-Headers
+	url = https://github.com/microsoft/DirectX-Headers.git

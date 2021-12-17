@@ -17,14 +17,18 @@ PUBLIC
     imgui_node_editor
     STB
     nativefiledialog
-    glbinding
-    D3D11.lib
+    #glbinding
+    #D3D11.lib
 )
 
 target_compile_definitions(SOIS PRIVATE GLFW_INCLUDE_NONE)
 
 if (${CMAKE_CXX_COMPILER_ID} STREQUAL MSVC)
-    target_link_libraries(SOIS PRIVATE opengl32.lib)
+    target_link_libraries(SOIS 
+    PRIVATE 
+        opengl32.lib 
+        DirectX-Headers #technically I guess this could be used for a WSL target...not sure how to detect that at Runtime.
+    )
 
     target_compile_options(SOIS PRIVATE 
     PUBLIC
@@ -33,3 +37,6 @@ if (${CMAKE_CXX_COMPILER_ID} STREQUAL MSVC)
         -WX- -W4
     )
 endif()
+
+get_target_property(targetSources SOIS SOURCES)
+source_group(TREE ${CMAKE_CURRENT_LIST_DIR} PREFIX "" FILES ${targetSources}) 

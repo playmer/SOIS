@@ -9,7 +9,7 @@
 
 #include "glm/glm.hpp"
 
-#include "SOIS/Renderer.hpp"
+#include "SOIS/Renderer/Renderer.hpp"
 
 namespace SOIS
 {
@@ -20,8 +20,10 @@ namespace SOIS
 
   enum PreferredRenderer
   {
-    OpenGL3_3,
-    DirectX11
+    //OpenGL3_3,
+	Vulkan,
+    //DirectX11,
+    DirectX12,
   };
 
   struct ApplicationContextConfig

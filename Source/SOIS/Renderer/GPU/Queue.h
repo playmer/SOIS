@@ -1,0 +1,7 @@
+namespace GPU
+{
+    class Queue
+    {
+        
+    }
+}

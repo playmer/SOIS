@@ -9,8 +9,8 @@
 
 #include "SOIS/ApplicationContext.hpp"
 
-#include "SOIS/DX11Renderer.hpp"
-#include "SOIS/OpenGL3Renderer.hpp"
+//#include "SOIS/Renderer/DirectX12/DX12Renderer.hpp"
+//#include "SOIS/Renderer/Vulkan/"
 
 namespace SOIS
 {
@@ -38,13 +38,13 @@ namespace SOIS
   {
     switch (aConfig.aPreferredRenderer)
     {
-      case PreferredRenderer::OpenGL3_3: 
-        mRenderer = std::make_unique<OpenGL3Renderer>();
+      case PreferredRenderer::DirectX12: 
+        //mRenderer = std::make_unique<DX12Renderer>();
         break;
-      case PreferredRenderer::DirectX11: 
-      default:
-        mRenderer = std::make_unique<DX11Renderer>();
-        break;
+      //case PreferredRenderer::DirectX11: 
+      //default:
+      //  mRenderer = std::make_unique<DX11Renderer>();
+      //  break;
     }
 
     if (nullptr == aConfig.aWindowName)
@@ -251,18 +251,18 @@ namespace SOIS
     ImGui::Render();
     mRenderer->RenderImguiData();
 
-    ImGuiIO& io = ImGui::GetIO();
+    mRenderer->RenderAndPresent();
 
-    // Update and Render additional Platform Windows
-    // (Platform functions may change the current OpenGL context, so we save/restore it to make it easier to paste this code elsewhere.
-    //  For this specific demo app we could also call glfwMakeContextCurrent(window) directly)
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-    {
-      ImGui::UpdatePlatformWindows();
-      ImGui::RenderPlatformWindowsDefault();
-    }
+	ImGuiIO& io = ImGui::GetIO();
 
-    mRenderer->Present();
+	// Update and Render additional Platform Windows
+	// (Platform functions may change the current OpenGL context, so we save/restore it to make it easier to paste this code elsewhere.
+	//  For this specific demo app we could also call glfwMakeContextCurrent(window) directly)
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
+	}
 
     ++mFrame;
   }
