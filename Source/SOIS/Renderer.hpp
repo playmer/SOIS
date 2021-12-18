@@ -8,6 +8,20 @@
 
 namespace SOIS
 {
+  enum class TextureLayout
+  {
+    RGBA_Unorm,
+    RGBA_Srgb,
+    Bc1_Rgba_Unorm,
+    Bc1_Rgba_Srgb,
+    Bc3_Srgb,
+    Bc3_Unorm,
+    Bc7_Unorm,
+    Bc7_Srgb,
+    InvalidLayout
+  };
+
+
   class Texture
   {
   public:
@@ -46,7 +60,7 @@ namespace SOIS
     virtual void ResizeRenderTarget(unsigned int aWidth, unsigned int aHeight) = 0;
     
     
-    virtual std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, int format, int w, int h, int pitch) = 0;
+    virtual std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) = 0;
     virtual std::unique_ptr<Texture> LoadTextureFromFile(std::string const& aFile) = 0;
 
     virtual void ClearRenderTarget(glm::vec4 aClearColor) = 0;

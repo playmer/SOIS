@@ -155,7 +155,23 @@ namespace SOIS
       winrt::com_ptr<ID3D11ShaderResourceView> ShaderResourceView;
   };
 
-  std::unique_ptr<Texture> DX11Renderer::LoadTextureFromData(unsigned char* data, int format, int w, int h, int pitch)
+  static DXGI_FORMAT FromSOIS(TextureLayout aLayout)
+  {
+      switch (aLayout)
+      {
+      case TextureLayout::RGBA_Unorm: return DXGI_FORMAT_R8G8B8A8_UNORM;
+      case TextureLayout::RGBA_Srgb: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+      case TextureLayout::Bc1_Rgba_Unorm: return DXGI_FORMAT_R8G8B8A8_UNORM;
+      case TextureLayout::Bc1_Rgba_Srgb: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+      case TextureLayout::Bc3_Srgb: return DXGI_FORMAT_BC3_UNORM_SRGB;
+      case TextureLayout::Bc3_Unorm: return DXGI_FORMAT_BC3_UNORM;
+      case TextureLayout::Bc7_Unorm: return DXGI_FORMAT_BC7_UNORM;
+      case TextureLayout::Bc7_Srgb: return DXGI_FORMAT_BC7_UNORM_SRGB;
+      case TextureLayout::InvalidLayout: return (DXGI_FORMAT)0;
+      }
+  }
+
+  std::unique_ptr<Texture> DX11Renderer::LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch)
   {
     // Create texture
     D3D11_TEXTURE2D_DESC desc;
@@ -164,7 +180,7 @@ namespace SOIS
     desc.Height = h;
     desc.MipLevels = 1;
     desc.ArraySize = 1;
-    desc.Format = (DXGI_FORMAT)format;
+    desc.Format = FromSOIS(format);
     desc.SampleDesc.Count = 1;
     desc.Usage = D3D11_USAGE_DEFAULT;
     desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
