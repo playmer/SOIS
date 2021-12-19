@@ -175,6 +175,8 @@ namespace SOIS
 
   void ApplicationContext::BeginFrame()
   {
+    mTouchData.mDownPrevious = mTouchData.mDown;
+
     // Poll and handle events (inputs, window resize, etc.)
     // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
     // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application.
@@ -211,28 +213,82 @@ namespace SOIS
         mHandler(event, mUserData);
       }
 
-      if (event.type == SDL_QUIT)
+      switch (event.type)
       {
-        mRunning = false;
-      }
-
-      if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(mWindow))
-      {
-        mRunning = false;
-      }
-
-      if (event.type == SDL_WINDOWEVENT)
-      {
-        auto windowEvent = event.window;
-
-        if (SDL_WINDOWEVENT_RESIZED      == windowEvent.event || 
-            SDL_WINDOWEVENT_SIZE_CHANGED == windowEvent.event)
+        case SDL_QUIT:
         {
-          int width;
-          int height;
-          SDL_GetWindowSize(mWindow, &width, &height);
-          
-          mRenderer->ResizeRenderTarget(width, height);
+            mRunning = false;
+            break;
+        }
+        case SDL_WINDOWEVENT:
+        {
+            auto windowEvent = event.window;
+            if (windowEvent.event == SDL_WINDOWEVENT_CLOSE && windowEvent.windowID == SDL_GetWindowID(mWindow))
+            {
+                mRunning = false;
+            }
+            else if (SDL_WINDOWEVENT_RESIZED == windowEvent.event ||
+                    SDL_WINDOWEVENT_SIZE_CHANGED == windowEvent.event)
+            {
+                int width;
+                int height;
+                SDL_GetWindowSize(mWindow, &width, &height);
+
+                mRenderer->ResizeRenderTarget(width, height);
+            }
+            break;
+        }
+        case SDL_FINGERMOTION:
+        {
+            // Get the finger position in screen coordinates.
+            SDL_Rect screenRect;
+            SDL_GetDisplayBounds(0, &screenRect);
+            glm::vec2 screenCoords{ event.tfinger.x * screenRect.w, event.tfinger.y * screenRect.h };
+
+            // Get the window position
+            int x, y;
+            SDL_GetWindowPosition(mWindow, &x, &y);
+            glm::vec2 windowPosition{ x, y };
+
+            // Subtracting them will retrieve the finger position in window coordinates
+            mTouchData.mFingerPosition = screenCoords - windowPosition;
+            break;
+        }
+        case SDL_FINGERDOWN:
+        {
+            mTouchData.mDown = true;
+
+            // Get the finger position in screen coordinates.
+            SDL_Rect screenRect;
+            SDL_GetDisplayBounds(0, &screenRect);
+            glm::vec2 screenCoords{ event.tfinger.x * screenRect.w, event.tfinger.y * screenRect.h };
+
+            // Get the window position
+            int x, y;
+            SDL_GetWindowPosition(mWindow, &x, &y);
+            glm::vec2 windowPosition{ x, y };
+
+            // Subtracting them will retrieve the finger position in window coordinates
+            mTouchData.mFingerPosition = screenCoords - windowPosition;
+            break;
+        }
+        case SDL_FINGERUP:
+        {
+            mTouchData.mDown = false;
+
+            // Get the finger position in screen coordinates.
+            SDL_Rect screenRect;
+            SDL_GetDisplayBounds(0, &screenRect);
+            glm::vec2 screenCoords{ event.tfinger.x * screenRect.w, event.tfinger.y * screenRect.h };
+
+            // Get the window position
+            int x, y;
+            SDL_GetWindowPosition(mWindow, &x, &y);
+            glm::vec2 windowPosition{ x, y };
+
+            // Subtracting them will retrieve the finger position in window coordinates
+            mTouchData.mFingerPosition = screenCoords - windowPosition;
+            break;
         }
       }
     }

@@ -34,11 +34,39 @@ namespace SOIS
     bool aBlocking = false;
   };
 
+  struct Touch
+  {
+      // Pressed Down this frame
+      bool Pressed()
+      {
+          return mDown && !mDownPrevious;
+      }
+
+      // Let go this frame
+      bool Released()
+      {
+          return !mDown && mDownPrevious;
+      }
+
+      bool Held()
+      {
+          return mDown && mDownPrevious;
+      }
+
+      // Only valid when one of the above functions returns true, otherwise
+      // undefined. (As of writing 0 or whatever it was last set to)
+      // These are defined in WindowCoordinates
+      glm::vec2 mFingerPosition = { 0.f, 0.f };
+      bool mDown = false;
+      bool mDownPrevious = false;
+  };
+
   struct ApplicationContext
   {
   public:
     SDL_Window* mWindow;
     glm::vec4 mClearColor;
+    Touch mTouchData;
 
     ApplicationContext(ApplicationContextConfig aConfig);
     ~ApplicationContext();
