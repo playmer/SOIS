@@ -39,18 +39,19 @@ add_library(imgui
     ImGuiSource/imgui.h
     ImGuiSource/imgui_demo.cpp
     ImGuiSource/imgui_draw.cpp
+    ImGuiSource/imgui_tables.cpp
     ImGuiSource/imgui_widgets.cpp
     ImGuiSource/imgui_internal.h
     ImGuiSource/misc/freetype/imgui_freetype.cpp
     ImGuiSource/misc/freetype/imgui_freetype.h
     ImGuiSource/misc/cpp/imgui_stdlib.cpp
     ImGuiSource/misc/cpp/imgui_stdlib.h
-    ImGuiSource/examples/imgui_impl_sdl.cpp
-    ImGuiSource/examples/imgui_impl_sdl.h
-    ImGuiSource/examples/imgui_impl_dx11.cpp
-    ImGuiSource/examples/imgui_impl_dx11.h
-    ImGuiSource/examples/imgui_impl_opengl3.cpp
-    ImGuiSource/examples/imgui_impl_opengl3.h
+    ImGuiSource/backends/imgui_impl_sdl.cpp
+    ImGuiSource/backends/imgui_impl_sdl.h
+    ImGuiSource/backends/imgui_impl_dx11.cpp
+    ImGuiSource/backends/imgui_impl_dx11.h
+    ImGuiSource/backends/imgui_impl_opengl3.cpp
+    ImGuiSource/backends/imgui_impl_opengl3.h
 )
 
 target_include_directories(imgui 
@@ -59,7 +60,7 @@ target_include_directories(imgui
         ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiSource/
         ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiSource/misc/freetype/
         ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiSource/misc/cpp/
-        ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiSource/examples/
+        ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiSource/backends/
 )
 
 target_link_libraries(imgui PUBLIC STB SDL2-static glbinding freetype)
