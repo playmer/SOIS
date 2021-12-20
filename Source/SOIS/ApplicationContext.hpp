@@ -57,6 +57,7 @@ namespace SOIS
       // undefined. (As of writing 0 or whatever it was last set to)
       // These are defined in WindowCoordinates
       glm::vec2 mFingerPosition = { 0.f, 0.f };
+      glm::vec2 mFingerDelta = { 0.f, 0.f };
       bool mDown = false;
       bool mDownPrevious = false;
       

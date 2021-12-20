@@ -185,6 +185,8 @@ namespace SOIS
   void ApplicationContext::BeginFrame()
   {
     mTouchData.mPinchEvent = false;
+    mTouchData.mPinchDelta = 0;
+    mTouchData.mFingerDelta = { 0.f, 0.f };
     mTouchData.mDownPrevious = mTouchData.mDown;
     mMouse.mScrollHappened = false;
 
@@ -264,7 +266,7 @@ namespace SOIS
             //printf("event.mgesture.dTheta: %f \n", event.mgesture.dTheta );
             //printf("event.mgesture.dDist: %f \n", event.mgesture.dDist );
             //printf("event.mgesture.numFingers: %d \n", event.mgesture.numFingers);
-            mTouchData.mFingerPosition = glm::vec2{ event.mgesture.x * w, event.mgesture.y * h };
+            mTouchData.mPinchPosition = glm::vec2{ event.mgesture.x * w, event.mgesture.y * h };
             mTouchData.mPinchDelta = event.mgesture.dDist;
             mTouchData.mPinchEvent = true;
             break;
@@ -273,7 +275,9 @@ namespace SOIS
         {
             int w, h;
             SDL_GetWindowSize(mWindow, &w, &h);
-            mTouchData.mFingerPosition = glm::vec2{ event.tfinger.x * w, event.tfinger.y * h };
+            auto tempPosition = glm::vec2{ event.tfinger.x * w, event.tfinger.y * h };
+            mTouchData.mFingerDelta = tempPosition - mTouchData.mFingerPosition;
+            mTouchData.mFingerPosition = tempPosition;
             break;
         }
         case SDL_FINGERDOWN:
