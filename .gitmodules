@@ -6,7 +6,7 @@
 	url = https://github.com/g-truc/glm.git
 [submodule "Dependencies/SDL"]
 	path = Dependencies/SDL
-	url = https://github.com/libsdl-org/SDL.git
+	url = https://github.com/playmer/SDL-1.git
 [submodule "Dependencies/freetype2"]
 	path = Dependencies/freetype2
 	url = git://git.sv.nongnu.org/freetype/freetype2.git

@@ -95,6 +95,15 @@ namespace SOIS
     unsigned int flags = 0;
     ImGuiFreeType::BuildFontAtlas(io.Fonts, flags);
 
+    
+    SDL_Rect screenRect;
+    SDL_GetDisplayBounds(0, &screenRect);
+    
+    printf("screenRect: %d %d", screenRect.w, screenRect.h);
+    int w, h;
+    SDL_GetWindowSize(mWindow, &w, &h);
+    printf("WindowSize: %d %d", w, h);
+
     // We run a begin frame here once, because the update function (meant to 
     // be run as the condition to a while loop.) needs to run both the begin
     // frame work (which it does after checking if it should continue the 
@@ -238,56 +247,33 @@ namespace SOIS
             }
             break;
         }
+        case SDL_MOUSEMOTION:
+        {
+            break;
+        }
         case SDL_FINGERMOTION:
         {
-            // Get the finger position in screen coordinates.
-            SDL_Rect screenRect;
-            SDL_GetDisplayBounds(0, &screenRect);
-            glm::vec2 screenCoords{ event.tfinger.x * screenRect.w, event.tfinger.y * screenRect.h };
-
-            // Get the window position
-            int x, y;
-            SDL_GetWindowPosition(mWindow, &x, &y);
-            glm::vec2 windowPosition{ x, y };
-
-            // Subtracting them will retrieve the finger position in window coordinates
-            mTouchData.mFingerPosition = screenCoords - windowPosition;
+            int w, h;
+            SDL_GetWindowSize(mWindow, &w, &h);
+            mTouchData.mFingerPosition = glm::vec2{ event.tfinger.x * w, event.tfinger.y * h };
             break;
         }
         case SDL_FINGERDOWN:
         {
             mTouchData.mDown = true;
-
-            // Get the finger position in screen coordinates.
-            SDL_Rect screenRect;
-            SDL_GetDisplayBounds(0, &screenRect);
-            glm::vec2 screenCoords{ event.tfinger.x * screenRect.w, event.tfinger.y * screenRect.h };
-
-            // Get the window position
-            int x, y;
-            SDL_GetWindowPosition(mWindow, &x, &y);
-            glm::vec2 windowPosition{ x, y };
-
-            // Subtracting them will retrieve the finger position in window coordinates
-            mTouchData.mFingerPosition = screenCoords - windowPosition;
+            
+            int w, h;
+            SDL_GetWindowSize(mWindow, &w, &h);
+            mTouchData.mFingerPosition = glm::vec2{ event.tfinger.x * w, event.tfinger.y * h };
             break;
         }
         case SDL_FINGERUP:
         {
             mTouchData.mDown = false;
-
-            // Get the finger position in screen coordinates.
-            SDL_Rect screenRect;
-            SDL_GetDisplayBounds(0, &screenRect);
-            glm::vec2 screenCoords{ event.tfinger.x * screenRect.w, event.tfinger.y * screenRect.h };
-
-            // Get the window position
-            int x, y;
-            SDL_GetWindowPosition(mWindow, &x, &y);
-            glm::vec2 windowPosition{ x, y };
-
-            // Subtracting them will retrieve the finger position in window coordinates
-            mTouchData.mFingerPosition = screenCoords - windowPosition;
+            
+            int w, h;
+            SDL_GetWindowSize(mWindow, &w, &h);
+            mTouchData.mFingerPosition = glm::vec2{ event.tfinger.x * w, event.tfinger.y * h };
             break;
         }
       }
