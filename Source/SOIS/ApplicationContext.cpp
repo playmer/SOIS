@@ -186,6 +186,7 @@ namespace SOIS
   {
     mTouchData.mPinchEvent = false;
     mTouchData.mDownPrevious = mTouchData.mDown;
+    mMouse.mScrollHappened = false;
 
     // Poll and handle events (inputs, window resize, etc.)
     // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
@@ -246,6 +247,12 @@ namespace SOIS
 
                 mRenderer->ResizeRenderTarget(width, height);
             }
+            break;
+        }
+        case SDL_MOUSEWHEEL:
+        {
+            mMouse.mScrollHappened = true;
+            mMouse.mMouseWheel = { event.wheel.x , event.wheel.y };
             break;
         }
         case SDL_MULTIGESTURE:

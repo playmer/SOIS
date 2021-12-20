@@ -70,8 +70,8 @@ namespace SOIS
 
   struct Mouse
   {
-      glm::vec2 mMouseWheel;
-      bool mScrollHappened;
+      glm::vec2 mMouseWheel = {0.f, 0.f};
+      bool mScrollHappened = false;
   };
 
   struct ApplicationContext
@@ -80,6 +80,7 @@ namespace SOIS
     SDL_Window* mWindow;
     glm::vec4 mClearColor;
     Touch mTouchData;
+    Mouse mMouse;
 
     ApplicationContext(ApplicationContextConfig aConfig);
     ~ApplicationContext();
