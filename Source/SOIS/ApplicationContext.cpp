@@ -184,6 +184,7 @@ namespace SOIS
 
   void ApplicationContext::BeginFrame()
   {
+    mTouchData.mPinchEvent = false;
     mTouchData.mDownPrevious = mTouchData.mDown;
 
     // Poll and handle events (inputs, window resize, etc.)
@@ -249,12 +250,16 @@ namespace SOIS
         }
         case SDL_MULTIGESTURE:
         {
-            SDL_MULTIGESTURE;
-            printf("event.mgesture.x: %f ", event.mgesture.x );
-            printf("event.mgesture.y: %f ", event.mgesture.y );
-            printf("event.mgesture.dTheta: %f ", event.mgesture.dTheta );
-            printf("event.mgesture.dDist: %f ", event.mgesture.dDist );
-            printf("event.mgesture.numFingers: %d ", event.mgesture.numFingers);
+            int w, h;
+            SDL_GetWindowSize(mWindow, &w, &h);
+            //printf("event.mgesture.x: %f \n", event.mgesture.x );
+            //printf("event.mgesture.y: %f \n", event.mgesture.y );
+            //printf("event.mgesture.dTheta: %f \n", event.mgesture.dTheta );
+            //printf("event.mgesture.dDist: %f \n", event.mgesture.dDist );
+            //printf("event.mgesture.numFingers: %d \n", event.mgesture.numFingers);
+            mTouchData.mFingerPosition = glm::vec2{ event.mgesture.x * w, event.mgesture.y * h };
+            mTouchData.mPinchDelta = event.mgesture.dDist;
+            mTouchData.mPinchEvent = true;
             break;
         }
         case SDL_FINGERMOTION:
