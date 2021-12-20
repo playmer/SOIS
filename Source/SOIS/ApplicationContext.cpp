@@ -247,8 +247,14 @@ namespace SOIS
             }
             break;
         }
-        case SDL_MOUSEMOTION:
+        case SDL_MULTIGESTURE:
         {
+            SDL_MULTIGESTURE;
+            printf("event.mgesture.x: %f ", event.mgesture.x );
+            printf("event.mgesture.y: %f ", event.mgesture.y );
+            printf("event.mgesture.dTheta: %f ", event.mgesture.dTheta );
+            printf("event.mgesture.dDist: %f ", event.mgesture.dDist );
+            printf("event.mgesture.numFingers: %d ", event.mgesture.numFingers);
             break;
         }
         case SDL_FINGERMOTION:

@@ -61,6 +61,12 @@ namespace SOIS
       bool mDownPrevious = false;
   };
 
+  struct Mouse
+  {
+      glm::vec2 mMouseWheel;
+      bool mScrollHappened;
+  };
+
   struct ApplicationContext
   {
   public:
