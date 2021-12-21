@@ -48,11 +48,17 @@ add_library(imgui
     ImGuiSource/misc/cpp/imgui_stdlib.h
     ImGuiSource/backends/imgui_impl_sdl.cpp
     ImGuiSource/backends/imgui_impl_sdl.h
-    ImGuiSource/backends/imgui_impl_dx11.cpp
-    ImGuiSource/backends/imgui_impl_dx11.h
     ImGuiSource/backends/imgui_impl_opengl3.cpp
     ImGuiSource/backends/imgui_impl_opengl3.h
 )
+
+if (WIN32)
+    target_sources(SOIS
+    PRIVATE
+        ImGuiSource/backends/imgui_impl_dx11.cpp
+        ImGuiSource/backends/imgui_impl_dx11.h
+    )
+endif()
 
 target_include_directories(imgui 
     PUBLIC 

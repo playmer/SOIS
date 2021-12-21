@@ -217,6 +217,11 @@ namespace SOIS
     {
     }
 
+    virtual void* GetTextureId()
+    {
+      return (void*)mTextureHandle;
+    };
+
     gl::GLuint mTextureHandle;
   };
 
