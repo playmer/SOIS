@@ -53,7 +53,7 @@ add_library(imgui
 )
 
 if (WIN32)
-    target_sources(SOIS
+    target_sources(imgui
     PRIVATE
         ImGuiSource/backends/imgui_impl_dx11.cpp
         ImGuiSource/backends/imgui_impl_dx11.h
