@@ -32,11 +32,11 @@ namespace SOIS
     sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; //DXGI_SWAP_EFFECT_DISCARD;
 
     UINT createDeviceFlags = 0;
-    
+
     // If the project is in a debug build, enable the debug layer.
-    #if !defined(NDEBUG)
-      createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
-    #endif
+#if !defined(NDEBUG)
+    createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
 
     //createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
     D3D_FEATURE_LEVEL featureLevel;
@@ -136,39 +136,39 @@ namespace SOIS
   class DX11Texture : public Texture
   {
   public:
-      DX11Texture(winrt::com_ptr<ID3D11ShaderResourceView> aShaderResourceView, int aWidth, int aHeight)
-          : Texture{ aWidth, aHeight }
-          , ShaderResourceView{aShaderResourceView}
-      {
+    DX11Texture(winrt::com_ptr<ID3D11ShaderResourceView> aShaderResourceView, int aWidth, int aHeight)
+      : Texture{ aWidth, aHeight }
+      , ShaderResourceView{ aShaderResourceView }
+    {
 
-      }
+    }
 
-      ~DX11Texture() override
-      {
-      }
-      
-      virtual void* GetTextureId()
-      {
-          return ShaderResourceView.get();
-      }
+    ~DX11Texture() override
+    {
+    }
 
-      winrt::com_ptr<ID3D11ShaderResourceView> ShaderResourceView;
+    virtual void* GetTextureId()
+    {
+      return ShaderResourceView.get();
+    }
+
+    winrt::com_ptr<ID3D11ShaderResourceView> ShaderResourceView;
   };
 
   static DXGI_FORMAT FromSOIS(TextureLayout aLayout)
   {
-      switch (aLayout)
-      {
-      case TextureLayout::RGBA_Unorm: return DXGI_FORMAT_R8G8B8A8_UNORM;
-      case TextureLayout::RGBA_Srgb: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-      case TextureLayout::Bc1_Rgba_Unorm: return DXGI_FORMAT_R8G8B8A8_UNORM;
-      case TextureLayout::Bc1_Rgba_Srgb: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-      case TextureLayout::Bc3_Srgb: return DXGI_FORMAT_BC3_UNORM_SRGB;
-      case TextureLayout::Bc3_Unorm: return DXGI_FORMAT_BC3_UNORM;
-      case TextureLayout::Bc7_Unorm: return DXGI_FORMAT_BC7_UNORM;
-      case TextureLayout::Bc7_Srgb: return DXGI_FORMAT_BC7_UNORM_SRGB;
-      case TextureLayout::InvalidLayout: return (DXGI_FORMAT)0;
-      }
+    switch (aLayout)
+    {
+    case TextureLayout::RGBA_Unorm: return DXGI_FORMAT_R8G8B8A8_UNORM;
+    case TextureLayout::RGBA_Srgb: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    case TextureLayout::Bc1_Rgba_Unorm: return DXGI_FORMAT_R8G8B8A8_UNORM;
+    case TextureLayout::Bc1_Rgba_Srgb: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    case TextureLayout::Bc3_Srgb: return DXGI_FORMAT_BC3_UNORM_SRGB;
+    case TextureLayout::Bc3_Unorm: return DXGI_FORMAT_BC3_UNORM;
+    case TextureLayout::Bc7_Unorm: return DXGI_FORMAT_BC7_UNORM;
+    case TextureLayout::Bc7_Srgb: return DXGI_FORMAT_BC7_UNORM_SRGB;
+    case TextureLayout::InvalidLayout: return (DXGI_FORMAT)0;
+    }
   }
 
   std::unique_ptr<Texture> DX11Renderer::LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch)
@@ -186,7 +186,7 @@ namespace SOIS
     desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
     desc.CPUAccessFlags = 0;
 
-    ID3D11Texture2D *pTexture = NULL;
+    ID3D11Texture2D* pTexture = NULL;
     D3D11_SUBRESOURCE_DATA subResource;
     subResource.pSysMem = data;
     subResource.SysMemPitch = pitch;
@@ -203,12 +203,12 @@ namespace SOIS
     srvDesc.Texture2D.MostDetailedMip = 0;
     mD3DDevice->CreateShaderResourceView(pTexture, &srvDesc, shaderResourceView.put());
     pTexture->Release();
-    
+
     auto texture = std::make_unique<DX11Texture>(shaderResourceView, w, h);
 
     return std::unique_ptr<Texture>(texture.release());
   }
-  
+
   std::unique_ptr<Texture> DX11Renderer::LoadTextureFromFile(std::string const& aFile)
   {
     // Load from disk into a raw RGBA buffer
@@ -216,7 +216,7 @@ namespace SOIS
     int image_height = 0;
     unsigned char* image_data = stbi_load(aFile.c_str(), &image_width, &image_height, NULL, 4);
     if (image_data == NULL)
-        return nullptr;
+      return nullptr;
 
     // Create texture
     D3D11_TEXTURE2D_DESC desc;
@@ -231,7 +231,7 @@ namespace SOIS
     desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
     desc.CPUAccessFlags = 0;
 
-    ID3D11Texture2D *pTexture = NULL;
+    ID3D11Texture2D* pTexture = NULL;
     D3D11_SUBRESOURCE_DATA subResource;
     subResource.pSysMem = image_data;
     subResource.SysMemPitch = desc.Width * 4;
@@ -248,7 +248,7 @@ namespace SOIS
     srvDesc.Texture2D.MostDetailedMip = 0;
     mD3DDevice->CreateShaderResourceView(pTexture, &srvDesc, shaderResourceView.put());
     pTexture->Release();
-    
+
     stbi_image_free(image_data);
     auto texture = std::make_unique<DX11Texture>(shaderResourceView, image_width, image_height);
 

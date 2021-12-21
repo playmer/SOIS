@@ -183,91 +183,91 @@ namespace SOIS
 
   static gl::GLenum FromSOIS(TextureLayout aLayout)
   {
-      switch (aLayout)
-      {
-      case TextureLayout::RGBA_Unorm: return gl::GL_RGBA;
-      case TextureLayout::RGBA_Srgb: return gl::GL_RGBA;
-      case TextureLayout::Bc1_Rgba_Srgb: return gl::GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
-      case TextureLayout::Bc3_Srgb: return gl::GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT;
+    switch (aLayout)
+    {
+    case TextureLayout::RGBA_Unorm: return gl::GL_RGBA;
+    case TextureLayout::RGBA_Srgb: return gl::GL_RGBA;
+    case TextureLayout::Bc1_Rgba_Srgb: return gl::GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
+    case TextureLayout::Bc3_Srgb: return gl::GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT;
 
-      case TextureLayout::Bc1_Rgba_Unorm: //return DXGI_FORMAT_A8_UNORM;
-      case TextureLayout::Bc3_Unorm: //return DXGI_FORMAT_BC3_UNORM;
-      case TextureLayout::Bc7_Unorm: //return DXGI_FORMAT_BC7_UNORM;
-      case TextureLayout::Bc7_Srgb: //return DXGI_FORMAT_BC7_UNORM_SRGB;
-      case TextureLayout::InvalidLayout: return (gl::GLenum)0;
-      }
+    case TextureLayout::Bc1_Rgba_Unorm: //return DXGI_FORMAT_A8_UNORM;
+    case TextureLayout::Bc3_Unorm: //return DXGI_FORMAT_BC3_UNORM;
+    case TextureLayout::Bc7_Unorm: //return DXGI_FORMAT_BC7_UNORM;
+    case TextureLayout::Bc7_Srgb: //return DXGI_FORMAT_BC7_UNORM_SRGB;
+    case TextureLayout::InvalidLayout: return (gl::GLenum)0;
+    }
   }
 
   class OpenGL3Texture : public Texture
   {
   public:
-      OpenGL3Texture(gl::GLuint aTextureHandle, int aWidth, int aHeight)
-          : Texture{ aWidth, aHeight }
-          , mTextureHandle{ aTextureHandle }
-      {
+    OpenGL3Texture(gl::GLuint aTextureHandle, int aWidth, int aHeight)
+      : Texture{ aWidth, aHeight }
+      , mTextureHandle{ aTextureHandle }
+    {
 
-      }
+    }
 
-      ~OpenGL3Texture() override
-      {
-      }
+    ~OpenGL3Texture() override
+    {
+    }
 
-      gl::GLuint mTextureHandle;
+    gl::GLuint mTextureHandle;
   };
-  
+
   std::unique_ptr<Texture> OpenGL3Renderer::LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch)
   {
-      // Create a OpenGL texture identifier
-      gl::GLuint image_texture;
-      gl::glGenTextures(1, &image_texture);
-      gl::glBindTexture(gl::GL_TEXTURE_2D, image_texture);
+    // Create a OpenGL texture identifier
+    gl::GLuint image_texture;
+    gl::glGenTextures(1, &image_texture);
+    gl::glBindTexture(gl::GL_TEXTURE_2D, image_texture);
 
-      // Setup filtering parameters for display
-      gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, gl::GL_LINEAR);
-      gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, gl::GL_LINEAR);
-      gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, gl::GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
-      gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, gl::GL_CLAMP_TO_EDGE); // Same
+    // Setup filtering parameters for display
+    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, gl::GL_LINEAR);
+    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, gl::GL_LINEAR);
+    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, gl::GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
+    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, gl::GL_CLAMP_TO_EDGE); // Same
 
-      // Upload pixels into texture
+    // Upload pixels into texture
 #if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
-      glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 #endif
-      gl::glTexImage2D(gl::GL_TEXTURE_2D, 0, FromSOIS(format), w, h, 0, FromSOIS(format), gl::GL_UNSIGNED_BYTE, data);
+    gl::glTexImage2D(gl::GL_TEXTURE_2D, 0, FromSOIS(format), w, h, 0, FromSOIS(format), gl::GL_UNSIGNED_BYTE, data);
 
-      auto texture = std::make_unique<OpenGL3Texture>(image_texture, w, h);
+    auto texture = std::make_unique<OpenGL3Texture>(image_texture, w, h);
 
-      return std::unique_ptr<Texture>(texture.release());
+    return std::unique_ptr<Texture>(texture.release());
   }
 
   std::unique_ptr<Texture> OpenGL3Renderer::LoadTextureFromFile(std::string const& aFile)
   {
-      // Load from disk into a raw RGBA buffer
-      int image_width = 0;
-      int image_height = 0;
-      unsigned char* image_data = stbi_load(aFile.c_str(), &image_width, &image_height, NULL, 4);
-      if (image_data == NULL)
-          return nullptr;
+    // Load from disk into a raw RGBA buffer
+    int image_width = 0;
+    int image_height = 0;
+    unsigned char* image_data = stbi_load(aFile.c_str(), &image_width, &image_height, NULL, 4);
+    if (image_data == NULL)
+      return nullptr;
 
-      // Create a OpenGL texture identifier
-      gl::GLuint image_texture;
-      gl::glGenTextures(1, &image_texture);
-      gl::glBindTexture(gl::GL_TEXTURE_2D, image_texture);
+    // Create a OpenGL texture identifier
+    gl::GLuint image_texture;
+    gl::glGenTextures(1, &image_texture);
+    gl::glBindTexture(gl::GL_TEXTURE_2D, image_texture);
 
-      // Setup filtering parameters for display
-      gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, gl::GL_LINEAR);
-      gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, gl::GL_LINEAR);
-      gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, gl::GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
-      gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, gl::GL_CLAMP_TO_EDGE); // Same
+    // Setup filtering parameters for display
+    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, gl::GL_LINEAR);
+    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, gl::GL_LINEAR);
+    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, gl::GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
+    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, gl::GL_CLAMP_TO_EDGE); // Same
 
-      // Upload pixels into texture
+    // Upload pixels into texture
 #if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
-      glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 #endif
-      gl::glTexImage2D(gl::GL_TEXTURE_2D, 0, gl::GL_RGBA, image_width, image_height, 0, gl::GL_RGBA, gl::GL_UNSIGNED_BYTE, image_data);
-      stbi_image_free(image_data);
+    gl::glTexImage2D(gl::GL_TEXTURE_2D, 0, gl::GL_RGBA, image_width, image_height, 0, gl::GL_RGBA, gl::GL_UNSIGNED_BYTE, image_data);
+    stbi_image_free(image_data);
 
-      auto texture = std::make_unique<OpenGL3Texture>(image_texture, image_width, image_height);
+    auto texture = std::make_unique<OpenGL3Texture>(image_texture, image_width, image_height);
 
-      return std::unique_ptr<Texture>(texture.release());
+    return std::unique_ptr<Texture>(texture.release());
   }
 }

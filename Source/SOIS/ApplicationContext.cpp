@@ -9,9 +9,6 @@
 
 #include "SOIS/ApplicationContext.hpp"
 
-#include "SOIS/DX11Renderer.hpp"
-#include "SOIS/OpenGL3Renderer.hpp"
-
 namespace SOIS
 {
   void ApplicationInitialization()
@@ -27,8 +24,8 @@ namespace SOIS
   }
 
   ApplicationContext::ApplicationContext(ApplicationContextConfig aConfig)
-    : mWindow{nullptr}
-    , mClearColor{.22f,.22f,.65f,1.0f}
+    : mWindow{ nullptr }
+    , mClearColor{ .22f,.22f,.65f,1.0f }
     , mHandler{ aConfig.aHandler }
     , mUserData{ aConfig.aUserData }
     , mFrame{ 0 }
@@ -38,13 +35,18 @@ namespace SOIS
   {
     switch (aConfig.aPreferredRenderer)
     {
-      case PreferredRenderer::OpenGL3_3: 
-        mRenderer = std::make_unique<OpenGL3Renderer>();
-        break;
-      case PreferredRenderer::DirectX11: 
-      default:
-        mRenderer = std::make_unique<DX11Renderer>();
-        break;
+    case PreferredRenderer::OpenGL3_3:    mRenderer = MakeOpenGL3Renderer(); break;
+
+#if defined(_WIN32)
+    case PreferredRenderer::DirectX11:  mRenderer = MakeDX11Renderer(); break;
+#endif
+    }
+
+    // Someone might request a default renderer that doesn't exist on their platform,
+    // if this happens a default case won't catch it, so we catch it after the switch.
+    if (nullptr == mRenderer)
+    {
+      mRenderer = MakeOpenGL3Renderer();
     }
 
     if (nullptr == aConfig.aWindowName)
@@ -52,9 +54,9 @@ namespace SOIS
       aConfig.aWindowName = "Dear ImGui SDL2+OpenGL3 Sample Application";
     }
 
-    SDL_WindowFlags window_flags = (SDL_WindowFlags)(mRenderer->GetAdditionalWindowFlags() | 
-                                                     SDL_WINDOW_RESIZABLE | 
-                                                     SDL_WINDOW_ALLOW_HIGHDPI);
+    SDL_WindowFlags window_flags = (SDL_WindowFlags)(mRenderer->GetAdditionalWindowFlags() |
+      SDL_WINDOW_RESIZABLE |
+      SDL_WINDOW_ALLOW_HIGHDPI);
     mWindow = SDL_CreateWindow(aConfig.aWindowName, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
 
     if (nullptr == mWindow)
@@ -95,10 +97,10 @@ namespace SOIS
     unsigned int flags = 0;
     ImGuiFreeType::BuildFontAtlas(io.Fonts, flags);
 
-    
+
     SDL_Rect screenRect;
     SDL_GetDisplayBounds(0, &screenRect);
-    
+
     printf("screenRect: %d %d", screenRect.w, screenRect.h);
     int w, h;
     SDL_GetWindowSize(mWindow, &w, &h);
@@ -123,7 +125,7 @@ namespace SOIS
     SDL_DestroyWindow(mWindow);
     SDL_Quit();
   }
-  
+
   void ApplicationContext::SetCallbackInfo(EventHandler aHandler, void* aUserData)
   {
     mHandler = aHandler;
@@ -228,76 +230,76 @@ namespace SOIS
 
       switch (event.type)
       {
-        case SDL_QUIT:
+      case SDL_QUIT:
+      {
+        mRunning = false;
+        break;
+      }
+      case SDL_WINDOWEVENT:
+      {
+        auto windowEvent = event.window;
+        if (windowEvent.event == SDL_WINDOWEVENT_CLOSE && windowEvent.windowID == SDL_GetWindowID(mWindow))
         {
-            mRunning = false;
-            break;
+          mRunning = false;
         }
-        case SDL_WINDOWEVENT:
+        else if (SDL_WINDOWEVENT_RESIZED == windowEvent.event ||
+          SDL_WINDOWEVENT_SIZE_CHANGED == windowEvent.event)
         {
-            auto windowEvent = event.window;
-            if (windowEvent.event == SDL_WINDOWEVENT_CLOSE && windowEvent.windowID == SDL_GetWindowID(mWindow))
-            {
-                mRunning = false;
-            }
-            else if (SDL_WINDOWEVENT_RESIZED == windowEvent.event ||
-                    SDL_WINDOWEVENT_SIZE_CHANGED == windowEvent.event)
-            {
-                int width;
-                int height;
-                SDL_GetWindowSize(mWindow, &width, &height);
+          int width;
+          int height;
+          SDL_GetWindowSize(mWindow, &width, &height);
 
-                mRenderer->ResizeRenderTarget(width, height);
-            }
-            break;
+          mRenderer->ResizeRenderTarget(width, height);
         }
-        case SDL_MOUSEWHEEL:
-        {
-            mMouse.mScrollHappened = true;
-            mMouse.mMouseWheel = { event.wheel.x , event.wheel.y };
-            break;
-        }
-        case SDL_MULTIGESTURE:
-        {
-            int w, h;
-            SDL_GetWindowSize(mWindow, &w, &h);
-            //printf("event.mgesture.x: %f \n", event.mgesture.x );
-            //printf("event.mgesture.y: %f \n", event.mgesture.y );
-            //printf("event.mgesture.dTheta: %f \n", event.mgesture.dTheta );
-            //printf("event.mgesture.dDist: %f \n", event.mgesture.dDist );
-            //printf("event.mgesture.numFingers: %d \n", event.mgesture.numFingers);
-            mTouchData.mPinchPosition = glm::vec2{ event.mgesture.x * w, event.mgesture.y * h };
-            mTouchData.mPinchDelta = event.mgesture.dDist;
-            mTouchData.mPinchEvent = true;
-            break;
-        }
-        case SDL_FINGERMOTION:
-        {
-            int w, h;
-            SDL_GetWindowSize(mWindow, &w, &h);
-            auto tempPosition = glm::vec2{ event.tfinger.x * w, event.tfinger.y * h };
-            mTouchData.mFingerDelta = tempPosition - mTouchData.mFingerPosition;
-            mTouchData.mFingerPosition = tempPosition;
-            break;
-        }
-        case SDL_FINGERDOWN:
-        {
-            mTouchData.mDown = true;
-            
-            int w, h;
-            SDL_GetWindowSize(mWindow, &w, &h);
-            mTouchData.mFingerPosition = glm::vec2{ event.tfinger.x * w, event.tfinger.y * h };
-            break;
-        }
-        case SDL_FINGERUP:
-        {
-            mTouchData.mDown = false;
-            
-            int w, h;
-            SDL_GetWindowSize(mWindow, &w, &h);
-            mTouchData.mFingerPosition = glm::vec2{ event.tfinger.x * w, event.tfinger.y * h };
-            break;
-        }
+        break;
+      }
+      case SDL_MOUSEWHEEL:
+      {
+        mMouse.mScrollHappened = true;
+        mMouse.mMouseWheel = { event.wheel.x , event.wheel.y };
+        break;
+      }
+      case SDL_MULTIGESTURE:
+      {
+        int w, h;
+        SDL_GetWindowSize(mWindow, &w, &h);
+        //printf("event.mgesture.x: %f \n", event.mgesture.x );
+        //printf("event.mgesture.y: %f \n", event.mgesture.y );
+        //printf("event.mgesture.dTheta: %f \n", event.mgesture.dTheta );
+        //printf("event.mgesture.dDist: %f \n", event.mgesture.dDist );
+        //printf("event.mgesture.numFingers: %d \n", event.mgesture.numFingers);
+        mTouchData.mPinchPosition = glm::vec2{ event.mgesture.x * w, event.mgesture.y * h };
+        mTouchData.mPinchDelta = event.mgesture.dDist;
+        mTouchData.mPinchEvent = true;
+        break;
+      }
+      case SDL_FINGERMOTION:
+      {
+        int w, h;
+        SDL_GetWindowSize(mWindow, &w, &h);
+        auto tempPosition = glm::vec2{ event.tfinger.x * w, event.tfinger.y * h };
+        mTouchData.mFingerDelta = tempPosition - mTouchData.mFingerPosition;
+        mTouchData.mFingerPosition = tempPosition;
+        break;
+      }
+      case SDL_FINGERDOWN:
+      {
+        mTouchData.mDown = true;
+
+        int w, h;
+        SDL_GetWindowSize(mWindow, &w, &h);
+        mTouchData.mFingerPosition = glm::vec2{ event.tfinger.x * w, event.tfinger.y * h };
+        break;
+      }
+      case SDL_FINGERUP:
+      {
+        mTouchData.mDown = false;
+
+        int w, h;
+        SDL_GetWindowSize(mWindow, &w, &h);
+        mTouchData.mFingerPosition = glm::vec2{ event.tfinger.x * w, event.tfinger.y * h };
+        break;
+      }
       }
     }
 
@@ -305,7 +307,7 @@ namespace SOIS
     mRenderer->NewFrame();
     ImGui_ImplSDL2_NewFrame(mWindow);
     ImGui::NewFrame();
-    
+
     mRenderer->ClearRenderTarget(mClearColor);
   }
 

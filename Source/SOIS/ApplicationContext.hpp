@@ -15,7 +15,7 @@ namespace SOIS
 {
   // Call only once, loads OpenGL function pointers and other such work.
   void ApplicationInitialization();
-  
+
   using EventHandler = void(*)(SDL_Event&, void*);
 
   enum PreferredRenderer
@@ -36,43 +36,43 @@ namespace SOIS
 
   struct Touch
   {
-      // Pressed Down this frame
-      bool Pressed()
-      {
-          return mDown && !mDownPrevious;
-      }
+    // Pressed Down this frame
+    bool Pressed()
+    {
+      return mDown && !mDownPrevious;
+    }
 
-      // Let go this frame
-      bool Released()
-      {
-          return !mDown && mDownPrevious;
-      }
+    // Let go this frame
+    bool Released()
+    {
+      return !mDown && mDownPrevious;
+    }
 
-      bool Held()
-      {
-          return mDown && mDownPrevious;
-      }
+    bool Held()
+    {
+      return mDown && mDownPrevious;
+    }
 
-      // Only valid when one of the above functions returns true, otherwise
-      // undefined. (As of writing 0 or whatever it was last set to)
-      // These are defined in WindowCoordinates
-      glm::vec2 mFingerPosition = { 0.f, 0.f };
-      glm::vec2 mFingerDelta = { 0.f, 0.f };
-      bool mDown = false;
-      bool mDownPrevious = false;
-      
-      // Only valid when one of the above functions returns true, otherwise
-      // undefined. (As of writing 0 or whatever it was last set to)
-      // These are defined in WindowCoordinates
-      glm::vec2 mPinchPosition;
-      float mPinchDelta = 0.f;
-      bool mPinchEvent = false;
+    // Only valid when one of the above functions returns true, otherwise
+    // undefined. (As of writing 0 or whatever it was last set to)
+    // These are defined in WindowCoordinates
+    glm::vec2 mFingerPosition = { 0.f, 0.f };
+    glm::vec2 mFingerDelta = { 0.f, 0.f };
+    bool mDown = false;
+    bool mDownPrevious = false;
+
+    // Only valid when one of the above functions returns true, otherwise
+    // undefined. (As of writing 0 or whatever it was last set to)
+    // These are defined in WindowCoordinates
+    glm::vec2 mPinchPosition;
+    float mPinchDelta = 0.f;
+    bool mPinchEvent = false;
   };
 
   struct Mouse
   {
-      glm::vec2 mMouseWheel = {0.f, 0.f};
-      bool mScrollHappened = false;
+    glm::vec2 mMouseWheel = { 0.f, 0.f };
+    bool mScrollHappened = false;
   };
 
   struct ApplicationContext
@@ -101,7 +101,7 @@ namespace SOIS
 
     Renderer* GetRenderer()
     {
-        return mRenderer.get();
+      return mRenderer.get();
     }
 
   private:

@@ -31,7 +31,7 @@ namespace SOIS
     void CreateRenderTarget();
     void CleanupDeviceD3D();
     void CleanupRenderTarget();
-    
+
     std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) override;
     std::unique_ptr<Texture> LoadTextureFromFile(std::string const& aFile) override;
 
