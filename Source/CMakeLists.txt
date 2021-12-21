@@ -18,17 +18,21 @@ PUBLIC
     STB
     nativefiledialog
     glbinding
-    D3D11.lib
 )
 
 target_compile_definitions(SOIS PRIVATE GLFW_INCLUDE_NONE)
+target_compile_features(SOIS PUBLIC cxx_std_17)
 
 if (${CMAKE_CXX_COMPILER_ID} STREQUAL MSVC)
-    target_link_libraries(SOIS PRIVATE opengl32.lib)
+    target_link_libraries(SOIS 
+    PRIVATE 
+        opengl32.lib
+        D3D11.lib
+    )
 
     target_compile_options(SOIS PRIVATE 
     PUBLIC
-        -permissive- -std:c++17
+        -permissive-
     PRIVATE
         -WX- -W4
     )

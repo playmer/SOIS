@@ -59,7 +59,7 @@ namespace SOIS
   class Renderer
   {
   public:
-    virtual ~Renderer() = 0 {};
+    virtual ~Renderer() {};
 
     virtual void Initialize(SDL_Window*) {};
 

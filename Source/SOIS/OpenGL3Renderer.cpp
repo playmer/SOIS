@@ -136,7 +136,12 @@ namespace SOIS
     glbinding::initialize(GLFunctionLoader);
 
     gl::glEnable(gl::GL_DEBUG_OUTPUT);
-    gl::glDebugMessageCallback(messageCallback, this);
+
+    // FIXME: This doesn't work on Apple when I tested it, need to look into this more on 
+    // other platforms, and maybe only enable it in dev builds.
+    #if defined(_WIN32)
+        gl::glDebugMessageCallback(messageCallback, this);
+    #endif
 
     ImGui_ImplSDL2_InitForOpenGL(mWindow, mContext);
     ImGui_ImplOpenGL3_Init(gGlslVersion);

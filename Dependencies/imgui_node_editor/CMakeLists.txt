@@ -33,7 +33,8 @@ add_library(imgui_node_editor STATIC ${_imgui_node_editor_Sources})
 
 set_property(TARGET imgui_node_editor PROPERTY FOLDER "NodeEditor")
 
-target_link_libraries(imgui_node_editor PUBLIC  imgui)
+target_link_libraries(imgui_node_editor PUBLIC imgui)
+target_compile_features(imgui_node_editor PUBLIC cxx_std_17)
 
 target_include_directories(imgui_node_editor PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/Include)
 target_include_directories(imgui_node_editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Source)
