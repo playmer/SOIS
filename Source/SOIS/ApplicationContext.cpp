@@ -263,11 +263,6 @@ namespace SOIS
       {
         int w, h;
         SDL_GetWindowSize(mWindow, &w, &h);
-        //printf("event.mgesture.x: %f \n", event.mgesture.x );
-        //printf("event.mgesture.y: %f \n", event.mgesture.y );
-        //printf("event.mgesture.dTheta: %f \n", event.mgesture.dTheta );
-        //printf("event.mgesture.dDist: %f \n", event.mgesture.dDist );
-        //printf("event.mgesture.numFingers: %d \n", event.mgesture.numFingers);
         mTouchData.mPinchPosition = glm::vec2{ event.mgesture.x * w, event.mgesture.y * h };
         mTouchData.mPinchDelta = event.mgesture.dDist;
         mTouchData.mPinchEvent = true;
