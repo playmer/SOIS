@@ -21,7 +21,7 @@ PUBLIC
 )
 
 target_compile_definitions(SOIS PRIVATE GLFW_INCLUDE_NONE)
-target_compile_features(SOIS PUBLIC cxx_std_17)
+target_compile_features(SOIS PUBLIC cxx_std_20)
 
 if (${CMAKE_CXX_COMPILER_ID} STREQUAL MSVC)
     target_link_libraries(SOIS 

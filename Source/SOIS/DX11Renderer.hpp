@@ -4,6 +4,8 @@
 #include <winrt/base.h>
 #include <d3d11.h>
 
+#include <string>
+
 #include <SDL.h> // Include glfw3.h after our OpenGL definitions
 
 #include "SOIS/Renderer.hpp"
@@ -33,7 +35,7 @@ namespace SOIS
     void CleanupRenderTarget();
 
     std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) override;
-    std::unique_ptr<Texture> LoadTextureFromFile(std::string const& aFile) override;
+    std::unique_ptr<Texture> LoadTextureFromFile(std::u8string const& aFile) override;
 
     winrt::com_ptr<ID3D11Device> mD3DDevice = nullptr;
     winrt::com_ptr<ID3D11DeviceContext> mD3DDeviceContext = nullptr;

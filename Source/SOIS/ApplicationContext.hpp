@@ -26,8 +26,8 @@ namespace SOIS
 
   struct ApplicationContextConfig
   {
-    char const* aWindowName = nullptr;
-    char const* aIniFile = nullptr;
+    char8_t const* aWindowName = nullptr;
+    char8_t const* aIniFile = nullptr;
     EventHandler aHandler = nullptr;
     void* aUserData = nullptr;
     PreferredRenderer aPreferredRenderer;

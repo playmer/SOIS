@@ -199,6 +199,7 @@ namespace SOIS
     case TextureLayout::Bc3_Unorm: //return DXGI_FORMAT_BC3_UNORM;
     case TextureLayout::Bc7_Unorm: //return DXGI_FORMAT_BC7_UNORM;
     case TextureLayout::Bc7_Srgb: //return DXGI_FORMAT_BC7_UNORM_SRGB;
+    default:
     case TextureLayout::InvalidLayout: return (gl::GLenum)0;
     }
   }
@@ -249,12 +250,25 @@ namespace SOIS
     return std::unique_ptr<Texture>(texture.release());
   }
 
-  std::unique_ptr<Texture> OpenGL3Renderer::LoadTextureFromFile(std::string const& aFile)
+  std::unique_ptr<Texture> OpenGL3Renderer::LoadTextureFromFile(std::u8string const& aFile)
   {
+    // Load from disk into a raw RGBA buffer
+    std::vector<char> imageData;
+    SDL_RWops* io = SDL_RWFromFile((char const*)aFile.c_str(), "rb");
+    if (io != nullptr)
+    {
+      /* Seek to 0 bytes from the end of the file */
+      Sint64 length = SDL_RWseek(io, 0, RW_SEEK_END);
+      SDL_RWseek(io, 0, RW_SEEK_SET);
+      imageData.resize(length);
+      SDL_RWread(io, imageData.data(), length, 1);
+      SDL_RWclose(io);
+    }
+
     // Load from disk into a raw RGBA buffer
     int image_width = 0;
     int image_height = 0;
-    unsigned char* image_data = stbi_load(aFile.c_str(), &image_width, &image_height, NULL, 4);
+    unsigned char* image_data = stbi_load_from_memory((unsigned char*)imageData.data(), imageData.size(), &image_width, &image_height, NULL, 4);
     if (image_data == NULL)
       return nullptr;
 

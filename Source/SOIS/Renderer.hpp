@@ -70,7 +70,7 @@ namespace SOIS
 
 
     virtual std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) = 0;
-    virtual std::unique_ptr<Texture> LoadTextureFromFile(std::string const& aFile) = 0;
+    virtual std::unique_ptr<Texture> LoadTextureFromFile(std::u8string const& aFile) = 0;
 
     virtual void ClearRenderTarget(glm::vec4 aClearColor) = 0;
     virtual void RenderImguiData() = 0;
