@@ -47,6 +47,7 @@ namespace SOIS
     void Initialize(vkb::Device aDevice, vkb::QueueType aType, size_t aNumberOfBuffers);
 
 
+    VulkanCommandBuffer WaitOnNextCommandList();
     VulkanCommandBuffer GetNextCommandList();
     VulkanCommandBuffer GetCurrentCommandList();
 
@@ -127,6 +128,11 @@ namespace SOIS
     VkRenderPass CreateRenderPass();
 
 
+    VkFence TransitionTextures();
+
+    std::vector<VkImage> mTexturesCreatedThisFrame;
+
+
     //void SetupVulkanWindow(ImGui_ImplVulkanH_Window* wd, VkSurfaceKHR surface, int width, int height);
     //void FrameRender(ImGui_ImplVulkanH_Window* wd, ImDrawData* draw_data);
     //void FramePresent(ImGui_ImplVulkanH_Window* wd);
@@ -142,17 +148,23 @@ namespace SOIS
     vkb::Device mDevice;
     VkPipelineCache mPipelineCache = VK_NULL_HANDLE;
     VulkanQueue mTransferQueue;
+    VulkanQueue mTextureTransitionQueue;
     VulkanQueue mGraphicsQueue;
     VulkanQueue mPresentQueue;
     vkb::Swapchain mSwapchain;
     VkDescriptorPool mDescriptorPool;
     VkClearColorValue mClearColor;
 
+    VkSampler mFontSampler;
+    VkDescriptorSetLayout mDescriptorSetLayout;
+
     std::vector<VkImage> swapchain_images;
     std::vector<VkImageView> swapchain_image_views;
-    std::vector<VkFramebuffer> framebuffers;
+    std::vector<VkFramebuffer> mFramebuffers;
 
     VkRenderPass mRenderPass;
+
+    SDL_Window* mWindow;
 
     //VkCommandPool command_pool;
     //std::vector<VkCommandBuffer> command_buffers;

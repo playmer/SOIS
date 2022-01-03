@@ -8,12 +8,22 @@
 
 #include "VulkanRenderer.hpp"
 
+#ifdef WIN32
+  #define DEBUG_BREAK __debugbreak
+#elif defined(__APPLE__)
+  #include <signal.h>
+  #define raise(SIGTRAP)
+#else
+  #include <signal.h>
+  #define raise(SIGTRAP)
+#endif
+
 namespace SOIS
 {
   //////////////////////////////////////////////////////////////////////////////////////////////
   // Helpers:
   static void check_vk_result(VkResult err)
-  {
+  {    
     if (err == 0)
       return;
     fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
@@ -104,13 +114,36 @@ namespace SOIS
   }
 
 
+  VulkanCommandBuffer VulkanQueue::WaitOnNextCommandList()
+  {
+    mCurrentBuffer = (1 + mCurrentBuffer) % mCommandBuffers.size();
+
+    if (mUsed[mCurrentBuffer])
+    {
+      vkWaitForFences(mDevice.device, 1, &mFences[mCurrentBuffer], true, UINT64_MAX);
+      vkResetFences(mDevice, 1, &mFences[mCurrentBuffer]);
+      vkResetCommandBuffer(mCommandBuffers[mCurrentBuffer], VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+    }
+    else
+    {
+      vkResetFences(mDevice, 1, &mFences[mCurrentBuffer]);
+      mUsed[mCurrentBuffer] = true;
+    }
+
+    return VulkanCommandBuffer{ mCommandBuffers[mCurrentBuffer], mFences[mCurrentBuffer], mAvailableSemaphores[mCurrentBuffer], mFinishedSemaphore[mCurrentBuffer] };
+  }
+
+
   VulkanCommandBuffer VulkanQueue::GetNextCommandList()
   {
     mCurrentBuffer = (1 + mCurrentBuffer) % mCommandBuffers.size();
 
-    if (!mUsed[mCurrentBuffer])
+    if (mUsed[mCurrentBuffer])
     {
       vkResetCommandBuffer(mCommandBuffers[mCurrentBuffer], VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+    }
+    else
+    {
       mUsed[mCurrentBuffer] = true;
     }
 
@@ -160,6 +193,7 @@ namespace SOIS
       || (VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT & messageSeverity))
     {
       printf("[%s: %s] %s\n", severity, type, pCallbackData->pMessage);
+      DEBUG_BREAK();
     }
 
     return VK_FALSE;
@@ -167,6 +201,7 @@ namespace SOIS
 
   void VulkanRenderer::Initialize(SDL_Window* aWindow)
   {
+    mWindow = aWindow;
 
     ///////////////////////////////////////
     // Create Instance
@@ -175,7 +210,7 @@ namespace SOIS
       .set_app_name("Application")
       .set_engine_name("SOIS")
       .require_api_version(1, 0, 0)
-      ;//.set_debug_callback(&DebugUtilsCallback);
+      .set_debug_callback(&DebugUtilsCallback);
 
     auto system_info_ret = vkb::SystemInfo::get_system_info();
     if (!system_info_ret) {
@@ -229,40 +264,20 @@ namespace SOIS
 
     ///////////////////////////////////////
     // Create Queues
-    mTransferQueue.Initialize(mDevice, vkb::QueueType::transfer, 3);
-    mGraphicsQueue.Initialize(mDevice, vkb::QueueType::graphics, 3);
-    mPresentQueue.Initialize(mDevice, vkb::QueueType::present, 3);
+    mTransferQueue.Initialize(mDevice, vkb::QueueType::transfer, 30);
+    mTextureTransitionQueue.Initialize(mDevice, vkb::QueueType::graphics, cMinImageCount);
+    mGraphicsQueue.Initialize(mDevice, vkb::QueueType::graphics, cMinImageCount);
+    mPresentQueue.Initialize(mDevice, vkb::QueueType::present, cMinImageCount);
 
     ///////////////////////////////////////
     // Create Swapchain
     vkb::SwapchainBuilder swapchain_builder{ mDevice, mSurface };
-
-
-    //const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
-    //const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
     swapchain_builder.set_desired_format(VkSurfaceFormatKHR{ VK_FORMAT_B8G8R8A8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR });
     auto swap_ret = swapchain_builder.build();
     if (!swap_ret) {
       printf("Failed to create Vulkan Swapchain. Error: %s\n", swap_ret.error().message().c_str());
     }
     mSwapchain = swap_ret.value();
-
-    // Setup Vulkan
-    //uint32_t extensions_count = 0;
-    //SDL_Vulkan_GetInstanceExtensions(aWindow, &extensions_count, NULL);
-    //const char** extensions = new const char* [extensions_count];
-    //SDL_Vulkan_GetInstanceExtensions(aWindow, &extensions_count, extensions);
-    //SetupVulkan(extensions, extensions_count);
-    //delete[] extensions;
-
-    // Create Window Surface
-    //VkSurfaceKHR surface;
-    //VkResult err;
-    //if (SDL_Vulkan_CreateSurface(aWindow, mInstance, &surface) == 0)
-    //{
-    //  printf("Failed to create Vulkan surface.\n");
-    //  return;
-    //}
 
     ///////////////////////////////////////
     // Create Descriptor Pool
@@ -289,6 +304,39 @@ namespace SOIS
     auto descriptorPoolError = vkCreateDescriptorPool(mDevice, &pool_info, mInstance.allocation_callbacks, &mDescriptorPool);
     check_vk_result(descriptorPoolError);
 
+    ///////////////////////////////////////
+    // Create Font Sampler:
+    {
+      VkSamplerCreateInfo info = {};
+      info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+      info.magFilter = VK_FILTER_LINEAR;
+      info.minFilter = VK_FILTER_LINEAR;
+      info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+      info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+      info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+      info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+      info.minLod = -1000;
+      info.maxLod = 1000;
+      info.maxAnisotropy = 1.0f;
+      VkResult err = vkCreateSampler(mDevice.device, &info, NULL, &mFontSampler);
+    }
+
+    ///////////////////////////////////////
+    // Create Descriptor Set Layout:
+    {
+      VkSampler sampler[1] = { mFontSampler };
+      VkDescriptorSetLayoutBinding binding[1] = {};
+      binding[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      binding[0].descriptorCount = 1;
+      binding[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+      binding[0].pImmutableSamplers = sampler;
+      VkDescriptorSetLayoutCreateInfo info = {};
+      info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+      info.bindingCount = 1;
+      info.pBindings = binding;
+      VkResult err = vkCreateDescriptorSetLayout(mDevice.device, &info, NULL, &mDescriptorSetLayout);
+    }
+
 
     ///////////////////////////////////////
     // Create Render Pass
@@ -302,7 +350,7 @@ namespace SOIS
     swapchain_images = mSwapchain.get_images().value();
     swapchain_image_views = mSwapchain.get_image_views().value();
 
-    framebuffers.resize(swapchain_image_views.size());
+    mFramebuffers.resize(swapchain_image_views.size());
 
     for (size_t i = 0; i < swapchain_image_views.size(); i++) {
       VkImageView attachments[] = { swapchain_image_views[i] };
@@ -316,7 +364,7 @@ namespace SOIS
       framebuffer_info.height = h;
       framebuffer_info.layers = 1;
 
-      if (vkCreateFramebuffer(mDevice, &framebuffer_info, nullptr, &framebuffers[i]) != VK_SUCCESS) {
+      if (vkCreateFramebuffer(mDevice, &framebuffer_info, nullptr, &mFramebuffers[i]) != VK_SUCCESS) {
         printf("failed to create framebuffer\n");
         return;
       }
@@ -391,43 +439,7 @@ namespace SOIS
   {
     ImGui_ImplVulkan_NewFrame();
 
-    auto [commandBuffer, fence, waitSemaphore, signalSemphore] = mGraphicsQueue.GetNextCommandList();
-
-    if (false == mLoadedFontTexture)
-    {
-      // Upload Fonts
-      if (fence != VK_NULL_HANDLE) {
-        vkWaitForFences(mDevice, 1, &fence, VK_TRUE, UINT64_MAX);
-      }
-
-      VkCommandBufferBeginInfo begin_info = {};
-      begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-      begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-      auto err = vkBeginCommandBuffer(commandBuffer, &begin_info);
-      check_vk_result(err);
-
-      ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
-
-      VkSubmitInfo end_info = {};
-      end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-      end_info.commandBufferCount = 1;
-      end_info.pCommandBuffers = &commandBuffer;
-      err = vkEndCommandBuffer(commandBuffer);
-      check_vk_result(err);
-      err = vkQueueSubmit(mGraphicsQueue, 1, &end_info, VK_NULL_HANDLE);
-      check_vk_result(err);
-
-      err = vkDeviceWaitIdle(mDevice);
-      check_vk_result(err);
-      ImGui_ImplVulkan_DestroyFontUploadObjects();
-      mLoadedFontTexture = true;
-
-      auto commandList = mGraphicsQueue.GetNextCommandList();
-      commandBuffer = commandList.mBuffer;
-      fence = commandList.mFence;
-      waitSemaphore = commandList.mAvailableSemaphore;
-      signalSemphore = commandList.mFinishedSemaphore;
-    }
+    auto [commandBuffer, fence, waitSemaphore, signalSemphore] = mGraphicsQueue.WaitOnNextCommandList();
 
     // Wait on last frame/get next frame now, just in case we need to load the font textures.
     VkResult result = vkAcquireNextImageKHR(mDevice,
@@ -445,10 +457,6 @@ namespace SOIS
       return;
     }
 
-    if (fence != VK_NULL_HANDLE) {
-      vkWaitForFences(mDevice, 1, &fence, VK_TRUE, UINT64_MAX);
-    }
-
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -458,7 +466,7 @@ namespace SOIS
     VkRenderPassBeginInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     info.renderPass = mRenderPass;
-    info.framebuffer = framebuffers[mImageIndex];
+    info.framebuffer = mFramebuffers[mImageIndex];
     info.renderArea.extent = mSwapchain.extent;
     info.clearValueCount = 1;
     info.pClearValues = &clearColor;
@@ -468,6 +476,7 @@ namespace SOIS
   void VulkanRenderer::RecreateSwapchain()
   {
     vkb::SwapchainBuilder swapchain_builder{ mDevice };
+    swapchain_builder.set_desired_format(VkSurfaceFormatKHR{ VK_FORMAT_B8G8R8A8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR });
     auto swap_ret = swapchain_builder.set_old_swapchain(mSwapchain)
       .build();
     if (!swap_ret) {
@@ -478,6 +487,38 @@ namespace SOIS
     vkb::destroy_swapchain(mSwapchain);
     // Get the new swapchain and place it in our variable
     mSwapchain = swap_ret.value();
+
+
+    for (auto framebuffer : mFramebuffers)
+    {
+      vkDestroyFramebuffer(mDevice.device, framebuffer, mDevice.allocation_callbacks);
+    }
+
+    int w, h;
+    SDL_GetWindowSize(mWindow, &w, &h);
+
+    swapchain_images = mSwapchain.get_images().value();
+    swapchain_image_views = mSwapchain.get_image_views().value();
+
+    mFramebuffers.resize(swapchain_image_views.size());
+
+    for (size_t i = 0; i < swapchain_image_views.size(); i++) {
+      VkImageView attachments[] = { swapchain_image_views[i] };
+
+      VkFramebufferCreateInfo framebuffer_info = {};
+      framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+      framebuffer_info.renderPass = mRenderPass;
+      framebuffer_info.attachmentCount = 1;
+      framebuffer_info.pAttachments = attachments;
+      framebuffer_info.width = w;
+      framebuffer_info.height = h;
+      framebuffer_info.layers = 1;
+
+      if (vkCreateFramebuffer(mDevice, &framebuffer_info, nullptr, &mFramebuffers[i]) != VK_SUCCESS) {
+        printf("failed to create framebuffer\n");
+        return;
+      }
+    }
   }
 
   void VulkanRenderer::ResizeRenderTarget(unsigned int aWidth, unsigned int aHeight)
@@ -506,6 +547,11 @@ namespace SOIS
   {
     auto [commandList, fence, waitSemaphore, signalSemphore] = mGraphicsQueue.GetCurrentCommandList();
 
+    auto transferQueueCommandList = mTransferQueue.GetCurrentCommandList();
+    vkWaitForFences(mDevice.device, 1, &transferQueueCommandList.mFence, true, UINT64_MAX);
+    //vkQueueWaitIdle(mTransferQueue);
+    auto transitionFence = TransitionTextures();
+
     vkCmdEndRenderPass(commandList);
     vkEndCommandBuffer(commandList);
 
@@ -526,6 +572,11 @@ namespace SOIS
     submitInfo.pSignalSemaphores = signal_semaphores;
 
     vkResetFences(mDevice, 1, &fence);
+
+    if (VK_NULL_HANDLE != transitionFence)
+    {
+      vkWaitForFences(mDevice.device, 1, &transitionFence, true, UINT64_MAX);
+    }
 
     if (vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, fence) != VK_SUCCESS) {
       printf("failed to submit draw command buffer\n");
@@ -562,15 +613,13 @@ namespace SOIS
   {
   public:
     VulkanTexture(
-      //Microsoft::WRL::ComPtr<ID3D12Resource> aTexture,
-      //ID3D12DescriptorHeap* aSrvHeap,
-      //D3D12_GPU_DESCRIPTOR_HANDLE aGpuHandle,
+      VkImage aImage,
+      VkDescriptorSet aDescriptorSet,
       int aWidth,
       int aHeight)
       : Texture{ aWidth, aHeight }
-      //, mTexture{ aTexture }
-      //, mSrvHeap{ aSrvHeap }
-      //, mGpuHandle{ aGpuHandle }
+      , mImage{ aImage }
+      , mDescriptorSet{ aDescriptorSet }
     {
 
     }
@@ -581,25 +630,38 @@ namespace SOIS
 
     virtual ImTextureID GetTextureId()
     {
-      //return ImTextureID{ (void*)mGpuHandle.ptr, mSrvHeap };
-      return ImTextureID{};
+      return ImTextureID{(void*)mImage, (void*)mDescriptorSet};
     }
 
-    //Microsoft::WRL::ComPtr<ID3D12Resource> mTexture;
-    //ID3D12DescriptorHeap* mSrvHeap;
-    //D3D12_GPU_DESCRIPTOR_HANDLE mGpuHandle;
+    VkImage mImage;
+    VkDescriptorSet mDescriptorSet;
   };
 
   std::unique_ptr<Texture> VulkanRenderer::LoadTextureFromData(unsigned char* data, TextureLayout format, int aWidth, int aHeight, int pitch)
   {
-    /*
     ImGuiIO& io = ImGui::GetIO();
-    //ImGui_ImplVulkan_Data* bd = ImGui_ImplVulkan_GetBackendData();
-    //ImGui_ImplVulkan_InitInfo* v = &bd->VulkanInitInfo;
 
     size_t upload_size = aWidth * aHeight * 4 * sizeof(char);
 
     VkResult err;
+
+    VkImage image;
+    VkImageView imageView;
+    VkDeviceMemory fontMemory;
+    VkDeviceMemory uploadBufferMemory;
+    VkBuffer uploadBuffer;
+    VkDescriptorSet descriptorSet;
+
+    // Create Descriptor Set:
+    {
+      VkDescriptorSetAllocateInfo alloc_info = {};
+      alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+      alloc_info.descriptorPool = mDescriptorPool;
+      alloc_info.descriptorSetCount = 1;
+      alloc_info.pSetLayouts = &mDescriptorSetLayout;
+      err = vkAllocateDescriptorSets(mDevice.device, &alloc_info, &descriptorSet);
+      check_vk_result(err);
+    }
 
     // Create the Image:
     {
@@ -617,17 +679,17 @@ namespace SOIS
       info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
       info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
       info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-      err = vkCreateImage(v->Device, &info, v->Allocator, &bd->FontImage);
+      err = vkCreateImage(mDevice.device, &info, mDevice.allocation_callbacks, &image);
       check_vk_result(err);
       VkMemoryRequirements req;
-      vkGetImageMemoryRequirements(v->Device, bd->FontImage, &req);
+      vkGetImageMemoryRequirements(mDevice.device, image, &req);
       VkMemoryAllocateInfo alloc_info = {};
       alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
       alloc_info.allocationSize = req.size;
       alloc_info.memoryTypeIndex = ImGui_ImplVulkan_MemoryType(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, req.memoryTypeBits);
-      err = vkAllocateMemory(v->Device, &alloc_info, v->Allocator, &bd->FontMemory);
+      err = vkAllocateMemory(mDevice.device, &alloc_info, mDevice.allocation_callbacks, &fontMemory);
       check_vk_result(err);
-      err = vkBindImageMemory(v->Device, bd->FontImage, bd->FontMemory, 0);
+      err = vkBindImageMemory(mDevice.device, image, fontMemory, 0);
       check_vk_result(err);
     }
 
@@ -635,29 +697,29 @@ namespace SOIS
     {
       VkImageViewCreateInfo info = {};
       info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-      info.image = bd->FontImage;
+      info.image = image;
       info.viewType = VK_IMAGE_VIEW_TYPE_2D;
       info.format = VK_FORMAT_R8G8B8A8_UNORM;
       info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
       info.subresourceRange.levelCount = 1;
       info.subresourceRange.layerCount = 1;
-      err = vkCreateImageView(v->Device, &info, v->Allocator, &bd->FontView);
+      err = vkCreateImageView(mDevice.device, &info, mDevice.allocation_callbacks, &imageView);
       check_vk_result(err);
     }
 
     // Update the Descriptor Set:
     {
       VkDescriptorImageInfo desc_image[1] = {};
-      desc_image[0].sampler = bd->FontSampler;
-      desc_image[0].imageView = bd->FontView;
+      desc_image[0].sampler = mFontSampler;
+      desc_image[0].imageView = imageView;
       desc_image[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
       VkWriteDescriptorSet write_desc[1] = {};
       write_desc[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      write_desc[0].dstSet = bd->DescriptorSet;
+      write_desc[0].dstSet = descriptorSet;
       write_desc[0].descriptorCount = 1;
       write_desc[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
       write_desc[0].pImageInfo = desc_image;
-      vkUpdateDescriptorSets(v->Device, 1, write_desc, 0, NULL);
+      vkUpdateDescriptorSets(mDevice.device, 1, write_desc, 0, NULL);
     }
 
     // Create the Upload Buffer:
@@ -667,35 +729,47 @@ namespace SOIS
       buffer_info.size = upload_size;
       buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
       buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-      err = vkCreateBuffer(v->Device, &buffer_info, v->Allocator, &bd->UploadBuffer);
+      err = vkCreateBuffer(mDevice.device, &buffer_info, mDevice.allocation_callbacks, &uploadBuffer);
       check_vk_result(err);
       VkMemoryRequirements req;
-      vkGetBufferMemoryRequirements(v->Device, bd->UploadBuffer, &req);
-      bd->BufferMemoryAlignment = (bd->BufferMemoryAlignment > req.alignment) ? bd->BufferMemoryAlignment : req.alignment;
+      vkGetBufferMemoryRequirements(mDevice.device, uploadBuffer, &req);
       VkMemoryAllocateInfo alloc_info = {};
       alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
       alloc_info.allocationSize = req.size;
       alloc_info.memoryTypeIndex = ImGui_ImplVulkan_MemoryType(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, req.memoryTypeBits);
-      err = vkAllocateMemory(v->Device, &alloc_info, v->Allocator, &bd->UploadBufferMemory);
+      err = vkAllocateMemory(mDevice.device, &alloc_info, mDevice.allocation_callbacks, &uploadBufferMemory);
       check_vk_result(err);
-      err = vkBindBufferMemory(v->Device, bd->UploadBuffer, bd->UploadBufferMemory, 0);
+      err = vkBindBufferMemory(mDevice.device, uploadBuffer, uploadBufferMemory, 0);
       check_vk_result(err);
     }
 
     // Upload to Buffer:
     {
       char* map = NULL;
-      err = vkMapMemory(v->Device, bd->UploadBufferMemory, 0, upload_size, 0, (void**)(&map));
+      err = vkMapMemory(mDevice.device, uploadBufferMemory, 0, upload_size, 0, (void**)(&map));
       check_vk_result(err);
       memcpy(map, data, upload_size);
       VkMappedMemoryRange range[1] = {};
       range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-      range[0].memory = bd->UploadBufferMemory;
+      range[0].memory = uploadBufferMemory;
       range[0].size = upload_size;
-      err = vkFlushMappedMemoryRanges(v->Device, 1, range);
+      err = vkFlushMappedMemoryRanges(mDevice.device, 1, range);
       check_vk_result(err);
-      vkUnmapMemory(v->Device, bd->UploadBufferMemory);
+      vkUnmapMemory(mDevice.device, uploadBufferMemory);
     }
+
+    // Create Command Buffer
+    auto [commandList, fence, waitSemaphore, signalSemphore] = mTransferQueue.WaitOnNextCommandList();
+
+    // Begin command buffer
+    {
+      VkCommandBufferBeginInfo begin_info = {};
+      begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+      begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+      err = vkBeginCommandBuffer(commandList, &begin_info);
+      check_vk_result(err);
+    }
+
 
     // Copy to Image:
     {
@@ -706,20 +780,59 @@ namespace SOIS
       copy_barrier[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
       copy_barrier[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       copy_barrier[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      copy_barrier[0].image = bd->FontImage;
+      copy_barrier[0].image = image;
       copy_barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
       copy_barrier[0].subresourceRange.levelCount = 1;
       copy_barrier[0].subresourceRange.layerCount = 1;
-      vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, copy_barrier);
+      vkCmdPipelineBarrier(commandList, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, copy_barrier);
 
       VkBufferImageCopy region = {};
       region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
       region.imageSubresource.layerCount = 1;
-      region.imageExtent.width = width;
-      region.imageExtent.height = height;
+      region.imageExtent.width = aWidth;
+      region.imageExtent.height = aHeight;
       region.imageExtent.depth = 1;
-      vkCmdCopyBufferToImage(command_buffer, bd->UploadBuffer, bd->FontImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+      vkCmdCopyBufferToImage(commandList, uploadBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
+      mTexturesCreatedThisFrame.emplace_back(image);
+    }
+
+    // Submit command buffer
+    {
+      VkSubmitInfo end_info = {};
+      end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+      end_info.commandBufferCount = 1;
+      end_info.pCommandBuffers = &commandList;
+      err = vkEndCommandBuffer(commandList);
+      check_vk_result(err);
+      err = vkQueueSubmit(mTransferQueue, 1, &end_info, fence);
+      check_vk_result(err);
+    }
+
+    return std::make_unique<VulkanTexture>(image, descriptorSet, aWidth, aHeight);
+  }
+
+  VkFence VulkanRenderer::TransitionTextures()
+  {
+    if (mTexturesCreatedThisFrame.empty())
+      return VK_NULL_HANDLE;
+
+    auto [commandList, fence, waitSemaphore, signalSemphore] = mTextureTransitionQueue.WaitOnNextCommandList();
+
+    VkCommandBufferBeginInfo begin_info = {};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    auto err = vkBeginCommandBuffer(commandList, &begin_info);
+    check_vk_result(err);
+
+    if (false == mLoadedFontTexture)
+    {
+      ImGui_ImplVulkan_CreateFontsTexture(commandList);
+      mLoadedFontTexture = true;
+    }
+
+    for (auto& image : mTexturesCreatedThisFrame)
+    {
       VkImageMemoryBarrier use_barrier[1] = {};
       use_barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
       use_barrier[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -728,19 +841,25 @@ namespace SOIS
       use_barrier[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
       use_barrier[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       use_barrier[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      use_barrier[0].image = bd->FontImage;
+      use_barrier[0].image = image;
       use_barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
       use_barrier[0].subresourceRange.levelCount = 1;
       use_barrier[0].subresourceRange.layerCount = 1;
-      vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, use_barrier);
+      vkCmdPipelineBarrier(commandList, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, use_barrier);
     }
 
-    // Store our identifier
-    io.Fonts->SetTexID(ImTextureID{ (void*)bd->FontImage, (void*)bd->DescriptorSet });
+    VkSubmitInfo end_info = {};
+    end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    end_info.commandBufferCount = 1;
+    end_info.pCommandBuffers = &commandList;
+    err = vkEndCommandBuffer(commandList);
+    check_vk_result(err);
 
-    //return true;
-    */
+    err = vkQueueSubmit(mTextureTransitionQueue, 1, &end_info, fence);
+    check_vk_result(err);
 
-    return nullptr;
+    mTexturesCreatedThisFrame.clear();
+
+    return fence;
   }
 }
