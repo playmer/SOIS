@@ -25,7 +25,6 @@ namespace SOIS
     void Present() override;
 
     std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) override;
-    std::unique_ptr<Texture> LoadTextureFromFile(std::u8string const& aFile) override;
 
   private:
     SDL_GLContext mContext;

@@ -27,8 +27,20 @@ target_sources(glm INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR}/glm/util/glm.natvis
 )
 
+add_subdirectory(DirectX-Headers)
 add_subdirectory(nativefiledialog)
 add_subdirectory(SDL)
+
+#####################################
+# Vulkan
+#####################################
+find_package(Vulkan)
+
+if (${Vulkan_FOUND})
+    add_subdirectory(vk-bootstrap)
+    add_subdirectory(VulkanMemoryAllocator)
+endif()
+
 
 #####################################
 # ImGui
@@ -52,12 +64,27 @@ add_library(imgui
     ImGuiSource/backends/imgui_impl_opengl3.h
 )
 
+if (${Vulkan_FOUND})
+    target_sources(imgui
+    PRIVATE
+        ImGuiSource/backends/imgui_impl_vulkan.cpp
+        ImGuiSource/backends/imgui_impl_vulkan.h
+    )
+
+    target_include_directories(imgui PUBLIC ${Vulkan_INCLUDE_DIRS})
+    target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
+endif()
+
 if (WIN32)
     target_sources(imgui
     PRIVATE
         ImGuiSource/backends/imgui_impl_dx11.cpp
         ImGuiSource/backends/imgui_impl_dx11.h
+        ImGuiSource/backends/imgui_impl_dx12.cpp
+        ImGuiSource/backends/imgui_impl_dx12.h
     )
+
+    target_link_libraries(imgui PUBLIC DirectX-Headers)
 endif()
 
 target_include_directories(imgui 

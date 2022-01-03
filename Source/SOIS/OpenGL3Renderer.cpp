@@ -218,9 +218,9 @@ namespace SOIS
     {
     }
 
-    virtual void* GetTextureId()
+    virtual ImTextureID GetTextureId()
     {
-      return (void*)mTextureHandle;
+      return ImTextureID{ (void*)mTextureHandle };
     };
 
     gl::GLuint mTextureHandle;
@@ -246,51 +246,6 @@ namespace SOIS
     gl::glTexImage2D(gl::GL_TEXTURE_2D, 0, FromSOIS(format), w, h, 0, FromSOIS(format), gl::GL_UNSIGNED_BYTE, data);
 
     auto texture = std::make_unique<OpenGL3Texture>(image_texture, w, h);
-
-    return std::unique_ptr<Texture>(texture.release());
-  }
-
-  std::unique_ptr<Texture> OpenGL3Renderer::LoadTextureFromFile(std::u8string const& aFile)
-  {
-    // Load from disk into a raw RGBA buffer
-    std::vector<char> imageData;
-    SDL_RWops* io = SDL_RWFromFile((char const*)aFile.c_str(), "rb");
-    if (io != nullptr)
-    {
-      /* Seek to 0 bytes from the end of the file */
-      Sint64 length = SDL_RWseek(io, 0, RW_SEEK_END);
-      SDL_RWseek(io, 0, RW_SEEK_SET);
-      imageData.resize(length);
-      SDL_RWread(io, imageData.data(), length, 1);
-      SDL_RWclose(io);
-    }
-
-    // Load from disk into a raw RGBA buffer
-    int image_width = 0;
-    int image_height = 0;
-    unsigned char* image_data = stbi_load_from_memory((unsigned char*)imageData.data(), imageData.size(), &image_width, &image_height, NULL, 4);
-    if (image_data == NULL)
-      return nullptr;
-
-    // Create a OpenGL texture identifier
-    gl::GLuint image_texture;
-    gl::glGenTextures(1, &image_texture);
-    gl::glBindTexture(gl::GL_TEXTURE_2D, image_texture);
-
-    // Setup filtering parameters for display
-    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, gl::GL_LINEAR);
-    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, gl::GL_LINEAR);
-    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, gl::GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
-    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, gl::GL_CLAMP_TO_EDGE); // Same
-
-    // Upload pixels into texture
-#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
-    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-#endif
-    gl::glTexImage2D(gl::GL_TEXTURE_2D, 0, gl::GL_RGBA, image_width, image_height, 0, gl::GL_RGBA, gl::GL_UNSIGNED_BYTE, image_data);
-    stbi_image_free(image_data);
-
-    auto texture = std::make_unique<OpenGL3Texture>(image_texture, image_width, image_height);
 
     return std::unique_ptr<Texture>(texture.release());
   }

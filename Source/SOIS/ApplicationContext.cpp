@@ -9,6 +9,12 @@
 
 #include "SOIS/ApplicationContext.hpp"
 
+#if defined __has_include
+#  if __has_include (<vulkan/vulkan.h>)
+#    define HAS_VULKAN
+#  endif
+#endif
+
 namespace SOIS
 {
   void ApplicationInitialization()
@@ -36,9 +42,12 @@ namespace SOIS
     switch (aConfig.aPreferredRenderer)
     {
     case PreferredRenderer::OpenGL3_3:    mRenderer = MakeOpenGL3Renderer(); break;
-
+#if defined(HAS_VULKAN)
+    case PreferredRenderer::Vulkan:    mRenderer = MakeVulkanRenderer(); break;
+#endif
 #if defined(_WIN32)
     case PreferredRenderer::DirectX11:  mRenderer = MakeDX11Renderer(); break;
+    case PreferredRenderer::DirectX12:  mRenderer = MakeDX12Renderer(); break;
 #endif
     }
 
@@ -220,46 +229,44 @@ namespace SOIS
       0xFE70,  0xFEFF, // Arabic Presentation Forms-B
       0xFF00,  0xFFEF, // Halfwidth and Fullwidth Forms
       0xFFF0,  0xFFFF, // Specials
-      0x10000, 0x1007F, // Linear B Syllabary
-      0x10080, 0x100FF, // Linear B Ideograms
-      0x10100, 0x1013F, // Aegean Numbers
-      0x10140, 0x102FF, // Undefined
-      0x10300, 0x1032F, // Old Italic
-      0x10330, 0x1034F, // Gothic
-      0x10380, 0x1039F, // Ugaritic
-      0x10400, 0x1044F, // Deseret
-      0x10450, 0x1047F, // Shavian
-      0x10480, 0x104AF, // Osmanya
-      0x104B0, 0x107FF, // Undefined
-      0x10800, 0x1083F, // Cypriot Syllabary
-      0x10840, 0x1CFFF, // Undefined
-      0x1D000, 0x1D0FF, // Byzantine Musical Symbols
-      0x1D100, 0x1D1FF, // Musical Symbols
-      0x1D200, 0x1D2FF, // Undefined
-      0x1D300, 0x1D35F, // Tai Xuan Jing Symbols
-      0x1D360, 0x1D3FF, // Undefined
-      0x1D400, 0x1D7FF, // Mathematical Alphanumeric Symbols
-      0x1D800, 0x1FFFF, // Undefined
-      0x20000, 0x2A6DF, // CJK Unified Ideographs Extension B
-      0x2A6E0, 0x2F7FF, // Undefined
-      0x2F800, 0x2FA1F, // CJK Compatibility Ideographs Supplement
-      0x2FAB0, 0xDFFFF, // Unused
-      0xE0000, 0xE007F, // Tags
-      0xE0080, 0xE00FF, // Unused
-      0xE0100, 0xE01EF, // Variation Selectors Supplement
-      0xE01F0, 0xEFFFF, // Unused
-      0xF0000, 0xFFFFD, // Supplementary Private Use Area-A
-      0xFFFFE, 0xFFFFF, // Unused
-      0x100000, 0x10FFFD, // Supplementary Private Use Area-B
+      //0x10000, 0x1007F, // Linear B Syllabary
+      //0x10080, 0x100FF, // Linear B Ideograms
+      //0x10100, 0x1013F, // Aegean Numbers
+      //0x10140, 0x102FF, // Undefined
+      //0x10300, 0x1032F, // Old Italic
+      //0x10330, 0x1034F, // Gothic
+      //0x10380, 0x1039F, // Ugaritic
+      //0x10400, 0x1044F, // Deseret
+      //0x10450, 0x1047F, // Shavian
+      //0x10480, 0x104AF, // Osmanya
+      //0x104B0, 0x107FF, // Undefined
+      //0x10800, 0x1083F, // Cypriot Syllabary
+      //0x10840, 0x1CFFF, // Undefined
+      //0x1D000, 0x1D0FF, // Byzantine Musical Symbols
+      //0x1D100, 0x1D1FF, // Musical Symbols
+      //0x1D200, 0x1D2FF, // Undefined
+      //0x1D300, 0x1D35F, // Tai Xuan Jing Symbols
+      //0x1D360, 0x1D3FF, // Undefined
+      //0x1D400, 0x1D7FF, // Mathematical Alphanumeric Symbols
+      //0x1D800, 0x1FFFF, // Undefined
+      //0x20000, 0x2A6DF, // CJK Unified Ideographs Extension B
+      //0x2A6E0, 0x2F7FF, // Undefined
+      //0x2F800, 0x2FA1F, // CJK Compatibility Ideographs Supplement
+      //0x2FAB0, 0xDFFFF, // Unused
+      //0xE0000, 0xE007F, // Tags
+      //0xE0080, 0xE00FF, // Unused
+      //0xE0100, 0xE01EF, // Variation Selectors Supplement
+      //0xE01F0, 0xEFFFF, // Unused
+      //0xF0000, 0xFFFFD, // Supplementary Private Use Area-A
+      //0xFFFFE, 0xFFFFF, // Unused
+      //0x100000, 0x10FFFD, // Supplementary Private Use Area-B
       0,
     };
 
-    //io.Fonts->AddFontFromFileTTF("Noto_Sans/NotoSans-Bold.ttf", 16.0f, nullptr, ranges);
-    //io.Fonts->AddFontFromFileTTF("Noto_Sans/NotoSans-Regular.ttf", 16.0f, &config);
-    io.Fonts->AddFontFromFileTTF("Noto_Sans/NotoSansJP-Regular.otf", 16.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
-    io.Fonts->AddFontFromFileTTF("Noto_Sans/NotoSansKR-Regular.otf", 16.0f, &config, io.Fonts->GetGlyphRangesKorean());
-    io.Fonts->AddFontFromFileTTF("Noto_Sans/NotoSansSymbols-Regular.ttf", 16.0f, &config, ranges);
-    io.Fonts->AddFontFromFileTTF("Noto_Sans/NotoSansSymbols2-Regular.ttf", 16.0f, &config, ranges);
+    io.Fonts->AddFontFromFileTTF("Noto_Sans/NotoSansJP-Regular.otf", 18.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
+    io.Fonts->AddFontFromFileTTF("Noto_Sans/NotoSansKR-Regular.otf", 18.0f, &config, io.Fonts->GetGlyphRangesKorean());
+    io.Fonts->AddFontFromFileTTF("Noto_Sans/NotoSansSymbols-Regular.ttf", 18.0f, &config, ranges);
+    io.Fonts->AddFontFromFileTTF("Noto_Sans/NotoSansSymbols2-Regular.ttf", 18.0f, &config, ranges);
     //unsigned int flags = ImGuiFreeType::NoHinting;
     unsigned int flags = 0;
     ImGuiFreeType::BuildFontAtlas(io.Fonts, flags);

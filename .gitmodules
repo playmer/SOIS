@@ -19,3 +19,12 @@
 [submodule "Dependencies/ImGuizmo"]
 	path = Dependencies/ImGuizmo
 	url = https://github.com/CedricGuillemet/ImGuizmo.git
+[submodule "Dependencies/DirectX-Headers"]
+	path = Dependencies/DirectX-Headers
+	url = https://github.com/microsoft/DirectX-Headers.git
+[submodule "Dependencies/vk-bootstrap"]
+	path = Dependencies/vk-bootstrap
+	url = https://github.com/charles-lunarg/vk-bootstrap.git
+[submodule "Dependencies/VulkanMemoryAllocator"]
+	path = Dependencies/VulkanMemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git

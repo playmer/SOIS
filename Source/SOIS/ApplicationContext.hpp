@@ -21,7 +21,9 @@ namespace SOIS
   enum PreferredRenderer
   {
     OpenGL3_3,
-    DirectX11
+    DirectX11,
+    DirectX12,
+    Vulkan
   };
 
   struct ApplicationContextConfig
