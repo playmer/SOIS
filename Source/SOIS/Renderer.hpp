@@ -653,6 +653,7 @@ namespace SOIS
     };
 
     virtual void ClearRenderTarget(glm::vec4 aClearColor) = 0;
+    virtual void Upload() {};
     virtual void RenderImguiData() = 0;
     virtual void Present() = 0;
 

@@ -630,6 +630,15 @@ namespace SOIS
     mClearColor.float32[3] = aClearColor.w;
   }
 
+
+  void VulkanRenderer::Upload()
+  {
+    auto transferQueueCommandList = mTransferQueue.GetCurrentCommandList();
+    vkWaitForFences(mDevice.device, 1, &transferQueueCommandList.mFence, true, UINT64_MAX);
+    //vkQueueWaitIdle(mTransferQueue);
+    TransitionTextures();
+  }
+
   void VulkanRenderer::RenderImguiData()
   {
     auto [commandList, fence, waitSemaphore, signalSemphore] = mGraphicsQueue.GetCurrentCommandList();
@@ -641,11 +650,7 @@ namespace SOIS
   void VulkanRenderer::Present()
   {
     auto [commandList, fence, waitSemaphore, signalSemphore] = mGraphicsQueue.GetCurrentCommandList();
-
-    auto transferQueueCommandList = mTransferQueue.GetCurrentCommandList();
-    vkWaitForFences(mDevice.device, 1, &transferQueueCommandList.mFence, true, UINT64_MAX);
-    //vkQueueWaitIdle(mTransferQueue);
-    auto transitionFence = TransitionTextures();
+    auto [_1, transitionFence, _3, _4] = mTextureTransitionQueue.GetCurrentCommandList();
 
     vkCmdEndRenderPass(commandList);
     vkEndCommandBuffer(commandList);
@@ -892,7 +897,7 @@ namespace SOIS
 
   VkFence VulkanRenderer::TransitionTextures()
   {
-    if (mTexturesCreatedThisFrame.empty())
+    if (mTexturesCreatedThisFrame.empty() && mLoadedFontTexture)
       return VK_NULL_HANDLE;
 
     auto [commandList, fence, waitSemaphore, signalSemphore] = mTextureTransitionQueue.WaitOnNextCommandList();

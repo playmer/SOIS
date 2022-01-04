@@ -117,6 +117,8 @@ namespace SOIS
     void ResizeRenderTarget(unsigned int aWidth, unsigned int aHeight) override;
 
     void ClearRenderTarget(glm::vec4 aClearColor) override;
+
+    void Upload() override;
     void RenderImguiData() override;
     void Present() override;
 

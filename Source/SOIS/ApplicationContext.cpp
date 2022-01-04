@@ -482,6 +482,7 @@ namespace SOIS
 
   void ApplicationContext::EndFrame()
   {
+    mRenderer->Upload();
     // Rendering Dear ImGui.
     ImGui::Render();
     mRenderer->RenderImguiData();
