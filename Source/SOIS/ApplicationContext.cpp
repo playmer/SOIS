@@ -91,7 +91,7 @@ namespace SOIS
       io.IniFilename = (const char*)aConfig.aIniFile;
     }
 
-    mRenderer->Initialize(mWindow);
+    mRenderer->Initialize(mWindow, aConfig.aPreferredGpu);
 
     // Setup style
     ImGui::StyleColorsDark();

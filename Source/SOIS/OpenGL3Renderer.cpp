@@ -124,7 +124,7 @@ namespace SOIS
   }
 
 
-  void OpenGL3Renderer::Initialize(SDL_Window* aWindow)
+  void OpenGL3Renderer::Initialize(SDL_Window* aWindow, char8_t const* /*aPreferredGpu*/)
   {
     mWindow = aWindow;
 

@@ -629,7 +629,7 @@ namespace SOIS
   public:
     virtual ~Renderer() {};
 
-    virtual void Initialize(SDL_Window*) {};
+    virtual void Initialize(SDL_Window*, char8_t const* /*aPreferredGpu*/) {};
 
     virtual SDL_WindowFlags GetAdditionalWindowFlags() { return (SDL_WindowFlags)0; };
 

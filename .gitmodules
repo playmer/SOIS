@@ -24,7 +24,7 @@
 	url = https://github.com/microsoft/DirectX-Headers.git
 [submodule "Dependencies/vk-bootstrap"]
 	path = Dependencies/vk-bootstrap
-	url = https://github.com/charles-lunarg/vk-bootstrap.git
+	url = https://github.com/playmer/vk-bootstrap.git
 [submodule "Dependencies/VulkanMemoryAllocator"]
 	path = Dependencies/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git

@@ -78,7 +78,7 @@ namespace SOIS
   }
 
 
-  void DX11Renderer::Initialize(SDL_Window* aWindow)
+  void DX11Renderer::Initialize(SDL_Window* aWindow, char8_t const* /*aPreferredGpu*/)
   {
     mWindow = aWindow;
 

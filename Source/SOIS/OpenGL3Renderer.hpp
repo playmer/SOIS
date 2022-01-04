@@ -13,7 +13,7 @@ namespace SOIS
     OpenGL3Renderer();
     ~OpenGL3Renderer() override;
 
-    void Initialize(SDL_Window* aWindow) override;
+    void Initialize(SDL_Window* aWindow, char8_t const* /*aPreferredGpu*/) override;
 
     SDL_WindowFlags GetAdditionalWindowFlags() override;
 

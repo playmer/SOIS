@@ -680,11 +680,7 @@ namespace SOIS
   {
   }
 
-
-
-
-
-  void DX12Renderer::Initialize(SDL_Window* aWindow)
+  void DX12Renderer::Initialize(SDL_Window* aWindow, char8_t const* /*aPreferredGpu*/)
   {
     mWindow = aWindow;
     EnableDebugLayer();
@@ -790,7 +786,6 @@ namespace SOIS
     mRenderingCommandBuffer->ResourceBarrier(1, &barrier);
 
     FLOAT clearColor[] = { aClearColor.x * aClearColor.w, aClearColor.y * aClearColor.w, aClearColor.z * aClearColor.w, aClearColor.w };
-    //FLOAT clearColor[] = { aClearColor.r, aClearColor.g, aClearColor.b, aClearColor.a };
     CD3DX12_CPU_DESCRIPTOR_HANDLE renderTargetView{
       mRTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
       static_cast<INT>(mCurrentBackBufferIndex),

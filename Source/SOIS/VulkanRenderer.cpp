@@ -199,7 +199,7 @@ namespace SOIS
     return VK_FALSE;
   }
 
-  void VulkanRenderer::Initialize(SDL_Window* aWindow)
+  void VulkanRenderer::Initialize(SDL_Window* aWindow, char8_t const* aPreferredGpu)
   {
     mWindow = aWindow;
 
@@ -245,13 +245,59 @@ namespace SOIS
     ///////////////////////////////////////
     // Select Physical Device
     vkb::PhysicalDeviceSelector phys_device_selector(mInstance);
-    auto physical_device_selector_return = phys_device_selector
-      .set_surface(mSurface)
-      .select();
-    if (!physical_device_selector_return) {
-      printf("Failed to create Vulkan Surface. Error: %s\n", physical_device_selector_return.error().message().c_str());
+    phys_device_selector.set_surface(mSurface);
+
+    // All the devices we could support. Right now we just print them out, but we may wish
+    // to eventually pipe this up to the application layer.
+    {
+      auto potential_physical_devices_return = phys_device_selector.get_suitable_devices(false);
+      if (!potential_physical_devices_return) 
+      {
+        printf("Failed to select Vulkan Physical Device. Error: %s\n", potential_physical_devices_return.error().message().c_str());
+      }
+
+      for (auto& physical_device : potential_physical_devices_return.value())
+      {
+        printf("Physical Device Name: %s\n", physical_device.properties.deviceName);
+      }
     }
-    mPhysicalDevice = physical_device_selector_return.value();
+
+    // We let the selector pick us the preferred GPU without user input, in case
+    // there's some issue with the user provided GPU.
+    {
+      auto physical_device_selector_return = phys_device_selector.select();
+
+      if (!physical_device_selector_return) 
+      {
+        // We return out because there's really nothing we can do at this point, there's not a 
+        // single suitable GPU on this system.
+        printf("Failed to select Vulkan Physical Device. Error: %s\n", physical_device_selector_return.error().message().c_str());
+        return;
+      }
+      else
+      {
+        mPhysicalDevice = physical_device_selector_return.value();
+      }
+    }
+
+    // Finally, we attempt to let the user select a particular GPU
+    if (nullptr != aPreferredGpu)
+    {
+      phys_device_selector.set_required_device_name((char const*)aPreferredGpu);
+
+      auto physical_device_selector_return = phys_device_selector.select();
+      if (!physical_device_selector_return) 
+      {
+        printf("Failed to select Vulkan Physical Device named \"%s\", falling back to \"%s\". Error: %s\n", 
+          aPreferredGpu,
+          mPhysicalDevice.properties.deviceName,
+          physical_device_selector_return.error().message().c_str());
+      }
+      else
+      {
+        mPhysicalDevice = physical_device_selector_return.value();
+      }
+    }
 
     ///////////////////////////////////////
     // Create Logical Device

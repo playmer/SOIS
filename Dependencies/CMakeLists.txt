@@ -64,6 +64,8 @@ add_library(imgui
     ImGuiSource/backends/imgui_impl_opengl3.h
 )
 
+target_compile_definitions(imgui PUBLIC IMGUI_CONSISTENT_BACKEND_TEXTURE_ID)
+
 if (${Vulkan_FOUND})
     target_sources(imgui
     PRIVATE

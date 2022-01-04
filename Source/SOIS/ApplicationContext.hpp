@@ -30,6 +30,8 @@ namespace SOIS
   {
     char8_t const* aWindowName = nullptr;
     char8_t const* aIniFile = nullptr;
+    // Currently (maybe only ever) works only on the Vulkan backend.
+    char8_t const* aPreferredGpu = nullptr;
     EventHandler aHandler = nullptr;
     void* aUserData = nullptr;
     PreferredRenderer aPreferredRenderer;

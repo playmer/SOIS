@@ -152,7 +152,7 @@ namespace SOIS
     DX12Renderer();
     ~DX12Renderer() override;
 
-    void Initialize(SDL_Window* aWindow) override;
+    void Initialize(SDL_Window* aWindow, char8_t const* /*aPreferredGpu*/) override;
 
     void NewFrame() override;
     void ResizeRenderTarget(unsigned int aWidth, unsigned int aHeight) override;
