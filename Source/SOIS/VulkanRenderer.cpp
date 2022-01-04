@@ -534,6 +534,7 @@ namespace SOIS
     {
       vmaDestroyImage(mAllocator, textureToDestroy.mImage, textureToDestroy.mImageAllocation);
     }
+    mTexturesToDestroyNextFrame.clear();
 
     // Wait on last frame/get next frame now, just in case we need to load the font textures.
     VkResult result = vkAcquireNextImageKHR(mDevice,
