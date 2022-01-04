@@ -55,16 +55,16 @@ namespace SOIS
       {
         // Okay try one more time for a graphics queue. We can use that as a fallback.
         mType = vkb::QueueType::graphics;
-        auto queue_ret = mDevice.get_queue(mType);
+        auto alternate_queue_ret = mDevice.get_queue(mType);
 
-        if (!queue_ret)
+        if (!alternate_queue_ret)
         {
-          printf("Failed to create Vulkan Queue. Error: %s\n", queue_ret.error().message().c_str());
+          printf("Failed to create Vulkan Queue. Error: %s\n", alternate_queue_ret.error().message().c_str());
           return;
         }
         else
         {
-          mQueue = queue_ret.value();
+          mQueue = alternate_queue_ret.value();
         }
       }
     }
@@ -193,6 +193,14 @@ namespace SOIS
     auto err = vkDeviceWaitIdle(mDevice);
     check_vk_result(err);
     ImGui_ImplVulkan_Shutdown();
+
+    // If there are textures left to destroy, take care of them:
+    for (auto& textureToDestroy : mTexturesToDestroyNextFrame)
+    {
+      vmaDestroyImage(mAllocator, textureToDestroy.mImage, textureToDestroy.mImageAllocation);
+    }
+
+    vmaDestroyAllocator(mAllocator);
   }
 
   SDL_WindowFlags VulkanRenderer::GetAdditionalWindowFlags()
@@ -204,7 +212,7 @@ namespace SOIS
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void* pUserData)
+    void* /*pUserData*/)
   {
     auto severity = vkb::to_string_message_severity(messageSeverity);
     auto type = vkb::to_string_message_type(messageType);
@@ -256,10 +264,12 @@ namespace SOIS
 
     ///////////////////////////////////////
     // Create Surface
-    SDL_bool err = SDL_Vulkan_CreateSurface(aWindow, mInstance.instance, &mSurface);
-    if (!err) {
-      printf("Failed to create Vulkan Surface.\n");
-      return;
+    {
+      SDL_bool err = SDL_Vulkan_CreateSurface(aWindow, mInstance.instance, &mSurface);
+      if (!err) {
+        printf("Failed to create Vulkan Surface.\n");
+        return;
+      }
     }
 
     ///////////////////////////////////////
@@ -309,7 +319,7 @@ namespace SOIS
       if (!physical_device_selector_return) 
       {
         printf("Failed to select Vulkan Physical Device named \"%s\", falling back to \"%s\". Error: %s\n", 
-          aPreferredGpu,
+          (char const*)aPreferredGpu,
           mPhysicalDevice.properties.deviceName,
           physical_device_selector_return.error().message().c_str());
       }
@@ -347,28 +357,30 @@ namespace SOIS
 
     ///////////////////////////////////////
     // Create Descriptor Pool
-    VkDescriptorPoolSize pool_sizes[] =
     {
-        { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
-    };
-    VkDescriptorPoolCreateInfo pool_info = {};
-    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    pool_info.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
-    pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
-    pool_info.pPoolSizes = pool_sizes;
-    auto descriptorPoolError = vkCreateDescriptorPool(mDevice, &pool_info, mInstance.allocation_callbacks, &mDescriptorPool);
-    check_vk_result(descriptorPoolError);
+      VkDescriptorPoolSize pool_sizes[] =
+      {
+          { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+          { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+          { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+          { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+          { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+          { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+          { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+          { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+          { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+          { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+      };
+      VkDescriptorPoolCreateInfo pool_info = {};
+      pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+      pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+      pool_info.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
+      pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
+      pool_info.pPoolSizes = pool_sizes;
+      VkResult err = vkCreateDescriptorPool(mDevice, &pool_info, mInstance.allocation_callbacks, &mDescriptorPool);
+      check_vk_result(err);
+    }
 
     ///////////////////////////////////////
     // Create Font Sampler:
@@ -385,6 +397,7 @@ namespace SOIS
       info.maxLod = 1000;
       info.maxAnisotropy = 1.0f;
       VkResult err = vkCreateSampler(mDevice.device, &info, NULL, &mFontSampler);
+      check_vk_result(err);
     }
 
     ///////////////////////////////////////
@@ -401,8 +414,18 @@ namespace SOIS
       info.bindingCount = 1;
       info.pBindings = binding;
       VkResult err = vkCreateDescriptorSetLayout(mDevice.device, &info, NULL, &mDescriptorSetLayout);
+      check_vk_result(err);
     }
 
+    ///////////////////////////////////////
+    // Create Allocator
+    VmaAllocatorCreateInfo allocatorInfo = {};
+    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+    allocatorInfo.physicalDevice = mPhysicalDevice;
+    allocatorInfo.device = mDevice;
+    allocatorInfo.instance = mInstance;
+
+    vmaCreateAllocator(&allocatorInfo, &mAllocator);
 
     ///////////////////////////////////////
     // Create Render Pass
@@ -507,6 +530,11 @@ namespace SOIS
 
     auto [commandBuffer, fence, waitSemaphore, signalSemphore] = mGraphicsQueue.WaitOnNextCommandList();
 
+    for (auto& textureToDestroy : mTexturesToDestroyNextFrame)
+    {
+      vmaDestroyImage(mAllocator, textureToDestroy.mImage, textureToDestroy.mImageAllocation);
+    }
+
     // Wait on last frame/get next frame now, just in case we need to load the font textures.
     VkResult result = vkAcquireNextImageKHR(mDevice,
       mSwapchain,
@@ -587,7 +615,7 @@ namespace SOIS
     }
   }
 
-  void VulkanRenderer::ResizeRenderTarget(unsigned int aWidth, unsigned int aHeight)
+  void VulkanRenderer::ResizeRenderTarget(unsigned int /*aWidth*/, unsigned int /*aHeight*/)
   {
     ImGui_ImplVulkan_SetMinImageCount(cMinImageCount);
     RecreateSwapchain();
@@ -679,19 +707,24 @@ namespace SOIS
   {
   public:
     VulkanTexture(
+      VulkanRenderer* aRenderer,
       VkImage aImage,
       VkDescriptorSet aDescriptorSet,
+      VmaAllocation aImageAllocation,
       int aWidth,
       int aHeight)
       : Texture{ aWidth, aHeight }
+      , mRenderer { aRenderer }
       , mImage{ aImage }
       , mDescriptorSet{ aDescriptorSet }
+      , mImageAllocation{ aImageAllocation }
     {
 
     }
 
     ~VulkanTexture() override
     {
+      mRenderer->mTexturesToDestroyNextFrame.emplace_back(mImage, mDescriptorSet, mImageAllocation);
     }
 
     virtual ImTextureID GetTextureId()
@@ -699,23 +732,24 @@ namespace SOIS
       return ImTextureID{(void*)mImage, (void*)mDescriptorSet};
     }
 
+    VulkanRenderer* mRenderer;
     VkImage mImage;
     VkDescriptorSet mDescriptorSet;
+    VmaAllocation mImageAllocation;
   };
 
   std::unique_ptr<Texture> VulkanRenderer::LoadTextureFromData(unsigned char* data, TextureLayout format, int aWidth, int aHeight, int pitch)
   {
-    ImGuiIO& io = ImGui::GetIO();
-
-    size_t upload_size = aWidth * aHeight * 4 * sizeof(char);
+    size_t upload_size = aHeight * pitch;
 
     VkResult err;
 
     VkImage image;
+    VmaAllocation imageAllocation;
+    VmaAllocationInfo imageAllocationInfo;
     VkImageView imageView;
-    VkDeviceMemory fontMemory;
-    VkDeviceMemory uploadBufferMemory;
     VkBuffer uploadBuffer;
+    VmaAllocation uploadBufferAllocation;
     VkDescriptorSet descriptorSet;
 
     // Create Descriptor Set:
@@ -731,6 +765,8 @@ namespace SOIS
 
     // Create the Image:
     {
+      VmaAllocationCreateInfo allocInfo = {};
+      allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
       VkImageCreateInfo info = {};
       info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
       info.imageType = VK_IMAGE_TYPE_2D;
@@ -745,17 +781,7 @@ namespace SOIS
       info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
       info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
       info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-      err = vkCreateImage(mDevice.device, &info, mDevice.allocation_callbacks, &image);
-      check_vk_result(err);
-      VkMemoryRequirements req;
-      vkGetImageMemoryRequirements(mDevice.device, image, &req);
-      VkMemoryAllocateInfo alloc_info = {};
-      alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-      alloc_info.allocationSize = req.size;
-      alloc_info.memoryTypeIndex = ImGui_ImplVulkan_MemoryType(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, req.memoryTypeBits);
-      err = vkAllocateMemory(mDevice.device, &alloc_info, mDevice.allocation_callbacks, &fontMemory);
-      check_vk_result(err);
-      err = vkBindImageMemory(mDevice.device, image, fontMemory, 0);
+      err = vmaCreateImage(mAllocator, &info, &allocInfo, &image, &imageAllocation, &imageAllocationInfo);
       check_vk_result(err);
     }
 
@@ -790,38 +816,24 @@ namespace SOIS
 
     // Create the Upload Buffer:
     {
+      VmaAllocationCreateInfo allocInfo = {};
+      allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
       VkBufferCreateInfo buffer_info = {};
       buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
       buffer_info.size = upload_size;
       buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
       buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-      err = vkCreateBuffer(mDevice.device, &buffer_info, mDevice.allocation_callbacks, &uploadBuffer);
-      check_vk_result(err);
-      VkMemoryRequirements req;
-      vkGetBufferMemoryRequirements(mDevice.device, uploadBuffer, &req);
-      VkMemoryAllocateInfo alloc_info = {};
-      alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-      alloc_info.allocationSize = req.size;
-      alloc_info.memoryTypeIndex = ImGui_ImplVulkan_MemoryType(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, req.memoryTypeBits);
-      err = vkAllocateMemory(mDevice.device, &alloc_info, mDevice.allocation_callbacks, &uploadBufferMemory);
-      check_vk_result(err);
-      err = vkBindBufferMemory(mDevice.device, uploadBuffer, uploadBufferMemory, 0);
+      err = vmaCreateBuffer(mAllocator, &buffer_info, &allocInfo, &uploadBuffer, &uploadBufferAllocation, nullptr);
       check_vk_result(err);
     }
 
     // Upload to Buffer:
     {
-      char* map = NULL;
-      err = vkMapMemory(mDevice.device, uploadBufferMemory, 0, upload_size, 0, (void**)(&map));
-      check_vk_result(err);
+      void* map;
+      vmaMapMemory(mAllocator, uploadBufferAllocation, &map);
       memcpy(map, data, upload_size);
-      VkMappedMemoryRange range[1] = {};
-      range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-      range[0].memory = uploadBufferMemory;
-      range[0].size = upload_size;
-      err = vkFlushMappedMemoryRanges(mDevice.device, 1, range);
-      check_vk_result(err);
-      vkUnmapMemory(mDevice.device, uploadBufferMemory);
+      vmaUnmapMemory(mAllocator, uploadBufferAllocation);
     }
 
     // Create Command Buffer
@@ -835,7 +847,6 @@ namespace SOIS
       err = vkBeginCommandBuffer(commandList, &begin_info);
       check_vk_result(err);
     }
-
 
     // Copy to Image:
     {
@@ -860,7 +871,7 @@ namespace SOIS
       region.imageExtent.depth = 1;
       vkCmdCopyBufferToImage(commandList, uploadBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-      mTexturesCreatedThisFrame.emplace_back(image);
+      mTexturesCreatedThisFrame.emplace_back(image, uploadBuffer, uploadBufferAllocation);
     }
 
     // Submit command buffer
@@ -875,7 +886,7 @@ namespace SOIS
       check_vk_result(err);
     }
 
-    return std::make_unique<VulkanTexture>(image, descriptorSet, aWidth, aHeight);
+    return std::make_unique<VulkanTexture>(this, image, descriptorSet, imageAllocation, aWidth, aHeight);
   }
 
   VkFence VulkanRenderer::TransitionTextures()
@@ -897,7 +908,7 @@ namespace SOIS
       mLoadedFontTexture = true;
     }
 
-    for (auto& image : mTexturesCreatedThisFrame)
+    for (auto& textureTransfer : mTexturesCreatedThisFrame)
     {
       VkImageMemoryBarrier use_barrier[1] = {};
       use_barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -907,11 +918,13 @@ namespace SOIS
       use_barrier[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
       use_barrier[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       use_barrier[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      use_barrier[0].image = image;
+      use_barrier[0].image = textureTransfer.mImage;
       use_barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
       use_barrier[0].subresourceRange.levelCount = 1;
       use_barrier[0].subresourceRange.layerCount = 1;
       vkCmdPipelineBarrier(commandList, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, use_barrier);
+
+      vmaDestroyBuffer(mAllocator, textureTransfer.mUploadBuffer, textureTransfer.mUploadBufferAllocation);
     }
 
     VkSubmitInfo end_info = {};

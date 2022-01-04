@@ -23,8 +23,9 @@ if (${Vulkan_FOUND})
     target_include_directories(SOIS PUBLIC ${Vulkan_INCLUDE_DIRS})
     target_link_libraries(SOIS 
     PUBLIC 
-        Vulkan::Vulkan 
         vk-bootstrap::vk-bootstrap
+        Vulkan::Vulkan
+        VulkanMemoryAllocator
     )
 endif()
 

@@ -3,6 +3,8 @@
 
 #include "vulkan/vulkan.h"
 
+#include "vk_mem_alloc.h"
+
 #include "VkBootstrap.h"
 
 #include "Renderer.hpp"
@@ -130,7 +132,24 @@ namespace SOIS
 
     VkFence TransitionTextures();
 
-    std::vector<VkImage> mTexturesCreatedThisFrame;
+    struct TextureTransferData
+    {
+      VkImage mImage;
+      VkBuffer mUploadBuffer;
+      VmaAllocation mUploadBufferAllocation;
+    };
+
+    std::vector<TextureTransferData> mTexturesCreatedThisFrame;
+
+
+    struct TextureDestroyer
+    {
+      VkImage mImage;
+      VkDescriptorSet mDescriptorSet;
+      VmaAllocation mImageAllocation;
+    };
+
+    std::vector<TextureDestroyer> mTexturesToDestroyNextFrame;
 
 
     //void SetupVulkanWindow(ImGui_ImplVulkanH_Window* wd, VkSurfaceKHR surface, int width, int height);
@@ -154,6 +173,8 @@ namespace SOIS
     vkb::Swapchain mSwapchain;
     VkDescriptorPool mDescriptorPool;
     VkClearColorValue mClearColor;
+
+    VmaAllocator mAllocator;
 
     VkSampler mFontSampler;
     VkDescriptorSetLayout mDescriptorSetLayout;
