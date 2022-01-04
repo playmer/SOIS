@@ -844,12 +844,13 @@ namespace SOIS
       // are not being referenced by an in-flight command list.
       mGraphicsQueue->Flush();
 
-      for (int i = 0; i < cNumFramesInFlight; ++i)
+      for (auto& backBuffer : mBackBuffers)
       {
         // Any references to the back buffers must be released
         // before the swap chain can be resized.
-        mBackBuffers[i].Reset();
+        backBuffer.Reset();
       }
+      mRenderingBackBuffer.Reset();
 
       DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
       ThrowIfFailed(mSwapChain->GetDesc(&swapChainDesc));
