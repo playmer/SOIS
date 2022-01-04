@@ -15,7 +15,7 @@
 	url = https://github.com/mlabbe/nativefiledialog.git
 [submodule "Dependencies/ImGuiSource"]
 	path = Dependencies/ImGuiSource
-	url = https://github.com/ocornut/imgui.git
+	url = https://github.com/playmer/imgui.git
 [submodule "Dependencies/ImGuizmo"]
 	path = Dependencies/ImGuizmo
 	url = https://github.com/CedricGuillemet/ImGuizmo.git
