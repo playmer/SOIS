@@ -50,8 +50,28 @@ namespace SOIS
     auto queue_ret = mDevice.get_queue(aType);
     if (!queue_ret) {
       printf("Failed to create Vulkan Queue. Error: %s\n", queue_ret.error().message().c_str());
+
+      if (vkb::QueueType::transfer == aType)
+      {
+        // Okay try one more time for a graphics queue. We can use that as a fallback.
+        mType = vkb::QueueType::graphics;
+        auto queue_ret = mDevice.get_queue(aType);
+
+        if (!queue_ret)
+        {
+          printf("Failed to create Vulkan Queue. Error: %s\n", queue_ret.error().message().c_str());
+          return;
+        }
+        else
+        {
+          mQueue = queue_ret.value();
+        }
+      }
     }
-    mQueue = queue_ret.value();
+    else
+    {
+      mQueue = queue_ret.value();
+    }
 
     VkCommandPoolCreateInfo pool_info = {};
     pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
