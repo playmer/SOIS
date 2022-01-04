@@ -250,7 +250,7 @@ namespace SOIS
     // All the devices we could support. Right now we just print them out, but we may wish
     // to eventually pipe this up to the application layer.
     {
-      auto potential_physical_devices_return = phys_device_selector.get_suitable_devices(false);
+      auto potential_physical_devices_return = phys_device_selector.get_suitable_devices(true);
       if (!potential_physical_devices_return) 
       {
         printf("Failed to select Vulkan Physical Device. Error: %s\n", potential_physical_devices_return.error().message().c_str());

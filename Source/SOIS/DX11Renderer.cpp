@@ -136,7 +136,7 @@ namespace SOIS
   class DX11Texture : public Texture
   {
   public:
-    DX11Texture(winrt::com_ptr<ID3D11ShaderResourceView> aShaderResourceView, int aWidth, int aHeight)
+    DX11Texture(Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> aShaderResourceView, int aWidth, int aHeight)
       : Texture{ aWidth, aHeight }
       , ShaderResourceView{ aShaderResourceView }
     {
@@ -149,10 +149,10 @@ namespace SOIS
 
     virtual ImTextureID GetTextureId()
     {
-      return ImTextureID{ ShaderResourceView.get() };
+      return ImTextureID{ ShaderResourceView.Get() };
     }
 
-    winrt::com_ptr<ID3D11ShaderResourceView> ShaderResourceView;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> ShaderResourceView;
   };
 
   static DXGI_FORMAT FromSOIS(TextureLayout aLayout)
@@ -194,14 +194,14 @@ namespace SOIS
     mD3DDevice->CreateTexture2D(&desc, &subResource, &pTexture);
 
     // Create texture view
-    winrt::com_ptr<ID3D11ShaderResourceView> shaderResourceView;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> shaderResourceView;
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
     ZeroMemory(&srvDesc, sizeof(srvDesc));
     srvDesc.Format = (DXGI_FORMAT)format;
     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = desc.MipLevels;
     srvDesc.Texture2D.MostDetailedMip = 0;
-    mD3DDevice->CreateShaderResourceView(pTexture, &srvDesc, shaderResourceView.put());
+    mD3DDevice->CreateShaderResourceView(pTexture, &srvDesc, &shaderResourceView);
     pTexture->Release();
 
     auto texture = std::make_unique<DX11Texture>(shaderResourceView, w, h);
