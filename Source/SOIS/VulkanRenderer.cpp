@@ -8,16 +8,6 @@
 
 #include "VulkanRenderer.hpp"
 
-#ifdef WIN32
-  #define DEBUG_BREAK __debugbreak
-#elif defined(__APPLE__)
-  #include <signal.h>
-  #define raise(SIGTRAP)
-#else
-  #include <signal.h>
-  #define raise(SIGTRAP)
-#endif
-
 namespace SOIS
 {
   //////////////////////////////////////////////////////////////////////////////////////////////
@@ -208,7 +198,20 @@ namespace SOIS
     return SDL_WINDOW_VULKAN;
   }
 
-  VkBool32 DebugUtilsCallback(
+
+
+
+  // 'unsigned int (*)(VkDebugUtilsMessageSeverityFlagBitsEXT, unsigned int, const VkDebugUtilsMessengerCallbackDataEXT *, void *) __attribute__((pcs("aapcs-vfp")))') 
+  // with an rvalue of type 
+  // 'VkBool32 (*)(VkDebugUtilsMessageSeverityFlagBitsEXT, VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT *, void *)' 
+  // aka 
+  // 'unsigned int (*)(VkDebugUtilsMessageSeverityFlagBitsEXT, unsigned int, const VkDebugUtilsMessengerCallbackDataEXT *, void *)')
+
+  VkBool32 
+#ifdef SYSTEM_ANDROID
+    __attribute__((pcs("aapcs-vfp")))
+#endif
+    DebugUtilsCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
@@ -730,10 +733,10 @@ namespace SOIS
 
     ~VulkanTexture() override
     {
-      mRenderer->mTexturesToDestroyNextFrame.emplace_back(mImage, mDescriptorSet, mImageAllocation);
+      mRenderer->mTexturesToDestroyNextFrame.emplace_back(VulkanRenderer::TextureDestroyer{ mImage, mDescriptorSet, mImageAllocation });
     }
 
-    virtual ImTextureID GetTextureId()
+    ImTextureID GetTextureId() override
     {
       return ImTextureID{(void*)mImage, (void*)mDescriptorSet};
     }
@@ -877,7 +880,7 @@ namespace SOIS
       region.imageExtent.depth = 1;
       vkCmdCopyBufferToImage(commandList, uploadBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-      mTexturesCreatedThisFrame.emplace_back(image, uploadBuffer, uploadBufferAllocation);
+      mTexturesCreatedThisFrame.emplace_back(TextureTransferData{ image, uploadBuffer, uploadBufferAllocation });
     }
 
     // Submit command buffer

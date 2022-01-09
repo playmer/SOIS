@@ -8,7 +8,9 @@ PRIVATE
     repo/src/nfd_common.h
 )
 
-if (WIN32)
+if (ANDROID)
+
+elseif (WIN32)
     target_sources(nativefiledialog 
     PRIVATE
         repo/src/nfd_win.cpp

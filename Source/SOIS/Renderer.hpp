@@ -47,13 +47,24 @@ namespace SOIS
   using u64 = std::uint64_t;
 
   using byte = std::uint8_t;
+  
+
+#ifdef WIN32
+  #define DEBUG_BREAK() __debugbreak
+#elif defined(__APPLE__)
+  #include <signal.h>
+  #define DEBUG_BREAK() raise(SIGTRAP)
+#else
+  #include <signal.h>
+  #define DEBUG_BREAK() raise(SIGTRAP)
+#endif
 
   inline void runtime_assert(bool value, char const* message)
   {
     if (!value)
     {
       printf("%s\nAborting...", message);
-      __debugbreak();
+      DEBUG_BREAK();
       abort();
     }
   }
@@ -337,7 +348,7 @@ namespace SOIS
     tType* begin() { return mBegin; }
     tType* end() { return mEnd; }
 
-    typename size_t size() const { return mEnd - mBegin; }
+    size_t size() const { return mEnd - mBegin; }
   protected:
     tType* mBegin;
     tType* mEnd;
@@ -483,7 +494,7 @@ namespace SOIS
   static Type* GetType()
   {
     static Type sType = Type::MakeType<tType>();
-    return sType;
+    return &sType;
   }
 
   template <int SizeInBytes>
@@ -803,7 +814,6 @@ namespace SOIS
 
     }
 
-    template <typename tType>
     GPUBufferRef(GPUBuffer<tType>& aBuffer)
       : mBuffer{ &(aBuffer.GetBase()) }
     {

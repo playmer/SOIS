@@ -44,10 +44,15 @@ namespace SOIS
     case PreferredRenderer::OpenGL3_3:    mRenderer = MakeOpenGL3Renderer(); break;
 #if defined(HAS_VULKAN)
     case PreferredRenderer::Vulkan:    mRenderer = MakeVulkanRenderer(); break;
+#else
+    case PreferredRenderer::Vulkan: break;
 #endif
 #if defined(_WIN32)
     case PreferredRenderer::DirectX11:  mRenderer = MakeDX11Renderer(); break;
     case PreferredRenderer::DirectX12:  mRenderer = MakeDX12Renderer(); break;
+#else
+    case PreferredRenderer::DirectX11: break;
+    case PreferredRenderer::DirectX12: break;
 #endif
     }
 

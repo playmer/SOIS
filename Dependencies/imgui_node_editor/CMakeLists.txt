@@ -34,7 +34,15 @@ add_library(imgui_node_editor STATIC ${_imgui_node_editor_Sources})
 set_property(TARGET imgui_node_editor PROPERTY FOLDER "NodeEditor")
 
 target_link_libraries(imgui_node_editor PUBLIC imgui)
-target_compile_features(imgui_node_editor PUBLIC cxx_std_17)
+
+# Android is causing issues on C++20, and due to how target_compile_features interacts with command line order
+# and PUBLIC props, we need to just use target_compile_options directly on Android until the NDK/CMake supports
+# cxx_std_20 properly and not using gnu extensions.
+if (NOT ${CMAKE_SYSTEM_NAME} STREQUAL Android)
+    target_compile_features(imgui_node_editor PUBLIC cxx_std_17)
+else()
+    target_compile_options(imgui_node_editor PRIVATE -std=c++17)
+endif()
 
 target_include_directories(imgui_node_editor PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/Include)
 target_include_directories(imgui_node_editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Source)

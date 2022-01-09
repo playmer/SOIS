@@ -29,6 +29,12 @@ target_sources(glm INTERFACE
 
 add_subdirectory(DirectX-Headers)
 add_subdirectory(nativefiledialog)
+
+
+#####################################
+# SDL2
+#####################################
+set(ANDROID_NDK ${CMAKE_ANDROID_NDK})
 add_subdirectory(SDL)
 
 #####################################

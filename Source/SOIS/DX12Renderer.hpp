@@ -79,69 +79,145 @@ namespace SOIS
     DX12Renderer* mRenderer;
   };
 
+  class Dx12Queue;
+  struct DX12CommandBuffer
+  {
+    ID3D12GraphicsCommandList2* operator->() const;
+    ID3D12GraphicsCommandList2& operator&();
+    ID3D12GraphicsCommandList2* operator&() const;
+    operator ID3D12GraphicsCommandList2* ();
+
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>& Buffer() const;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>& Buffer();
+    Microsoft::WRL::ComPtr<ID3D12Fence>& Fence();
+    HANDLE& FenceEvent();
+    uint64_t& FenceValue();
+
+    void Wait();
+    void ExecuteOnQueue();
+
+    Dx12Queue* mQueue;
+    size_t mIndex;
+  };
+
 
   class Dx12Queue
   {
   public:
-    Dx12Queue(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type);
-    virtual ~Dx12Queue();
 
-    // Get an available command list from the command queue.
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetCommandList();
+    Dx12Queue();
 
-    // Execute a command list.
-    // Returns the fence value to wait for for this command list.
-    uint64_t ExecuteCommandList(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> commandList);
+    void Initialize(Microsoft::WRL::ComPtr<ID3D12Device2> aDevice, D3D12_COMMAND_LIST_TYPE aType, size_t aNumberOfBuffers);
 
-    uint64_t Signal();
-    bool IsFenceComplete(uint64_t fenceValue);
-    void WaitForFenceValue(uint64_t fenceValue);
-    void Flush();
+    DX12CommandBuffer WaitOnNextCommandList();
+    DX12CommandBuffer GetNextCommandList();
+    DX12CommandBuffer GetCurrentCommandList();
 
-    auto operator->() const
+    auto* operator&()
     {
       return mQueue.Get();
     }
 
-    auto& operator&()
+    auto* operator&() const
     {
-      return mQueue;
+      return mQueue.Get();
     }
 
-    auto& operator&() const
+    operator ID3D12CommandQueue*()
     {
-      return mQueue;
+      return mQueue.Get();
     }
 
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetD3D12CommandQueue() const
+    bool IsInitialized()
     {
-      return mQueue;
+      return (nullptr != mPool)
+        && (nullptr != mCommandBuffers.back())
+        && (nullptr != mFences.back())
+        && (NULL != mFenceEvents.back());
+        //&& (nullptr != mFinishedSemaphore.back());
     }
+
+    void Flush();
+
+    //uint32_t GetQueueFamily();
+
+
+    //Dx12Queue(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type);
+    //virtual ~Dx12Queue();
+    //
+    //// Get an available command list from the command queue.
+    //Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetCommandList();
+    //
+    //// Execute a command list.
+    //// Returns the fence value to wait for for this command list.
+    //uint64_t ExecuteCommandList(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> commandList);
+    //
+    //uint64_t Signal();
+    //bool IsFenceComplete(uint64_t fenceValue);
+    //void WaitForFenceValue(uint64_t fenceValue);
+    //void Flush();
+    //
+    //auto operator->() const
+    //{
+    //  return mQueue.Get();
+    //}
+    //
+    //auto& operator&()
+    //{
+    //  return mQueue;
+    //}
+    //
+    //auto& operator&() const
+    //{
+    //  return mQueue;
+    //}
+    //
+    //Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetD3D12CommandQueue() const
+    //{
+    //  return mQueue;
+    //}
 
   protected:
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CreateCommandAllocator();
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CreateCommandList(Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator);
+    //Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CreateCommandAllocator();
+    //Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CreateCommandList(Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator);
 
   private:
-    // Keep track of command allocators that are "in-flight"
-    struct CommandAllocatorEntry
-    {
-      uint64_t fenceValue;
-      Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator;
-    };
+    //// Keep track of command allocators that are "in-flight"
+    //struct CommandAllocatorEntry
+    //{
+    //  uint64_t fenceValue;
+    //  Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator;
+    //};
+    //
+    //using CommandAllocatorQueue = std::queue<CommandAllocatorEntry>;
+    //using CommandListQueue = std::queue<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> >;
+    //
+    //D3D12_COMMAND_LIST_TYPE                     mCommandListType;
+    //Microsoft::WRL::ComPtr<ID3D12Device2>       mDevice;
+    //Microsoft::WRL::ComPtr<ID3D12CommandQueue>  mQueue;
+    //Microsoft::WRL::ComPtr<ID3D12Fence>         mFence;
+    //HANDLE                                      mFenceEvent;
+    //uint64_t                                    mFenceValue;
+    //
+    //CommandAllocatorQueue                       mCommandAllocatorQueue;
+    //CommandListQueue                            mCommandListQueue;
+    friend DX12CommandBuffer;
 
-    using CommandAllocatorQueue = std::queue<CommandAllocatorEntry>;
-    using CommandListQueue = std::queue<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> >;
 
-    D3D12_COMMAND_LIST_TYPE                     mCommandListType;
-    Microsoft::WRL::ComPtr<ID3D12Device2>       mDevice;
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue>  mQueue;
-    Microsoft::WRL::ComPtr<ID3D12Fence>         mFence;
-    HANDLE                                      mFenceEvent;
-    uint64_t                                    mFenceValue;
 
-    CommandAllocatorQueue                       mCommandAllocatorQueue;
-    CommandListQueue                            mCommandListQueue;
+    Microsoft::WRL::ComPtr<ID3D12Device2> mDevice;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> mQueue;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> mPool;
+    std::vector<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>> mCommandBuffers;
+    std::vector<Microsoft::WRL::ComPtr<ID3D12Fence>> mFences;
+    std::vector<HANDLE> mFenceEvents;
+    std::vector<uint64_t> mFenceValues;
+
+    //std::vector<VkSemaphore> mAvailableSemaphores;
+    //std::vector<VkSemaphore> mFinishedSemaphore;
+    std::vector<bool> mUsed; // lmao vector bool
+    size_t mCurrentBuffer = 0;
+    D3D12_COMMAND_LIST_TYPE mType;
   };
 
 
@@ -163,6 +239,7 @@ namespace SOIS
     void ClearRenderTarget(glm::vec4 aClearColor) override;
     void RenderImguiData() override;
     void Present() override;
+    void Upload() override;
 
 
     // Ostensibly private
@@ -208,6 +285,50 @@ namespace SOIS
     //int mBackBufferIdx = 0;
 
 
+    void TransitionTextures();
+    
+    struct TextureTransferData
+    {
+      size_t mWidth;
+      size_t mHeight;
+      size_t mUploadPitch;
+      Microsoft::WRL::ComPtr<ID3D12Resource> mTexture;
+      Microsoft::WRL::ComPtr<ID3D12Resource> mUploadBuffer;
+    };
+    
+    std::vector<TextureTransferData> mTexturesCreatedThisFrame;
+    
+    
+    struct TextureDestroyer
+    {
+      Microsoft::WRL::ComPtr<ID3D12Resource> mTexture;
+    };
+    
+    std::vector<TextureDestroyer> mTexturesToDestroyNextFrame;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -219,21 +340,26 @@ namespace SOIS
 
 
     Microsoft::WRL::ComPtr<ID3D12Device2> mDevice;
-    std::optional<Dx12Queue> mGraphicsQueue;
-    std::optional<Dx12Queue> mComputeQueue;
-    std::optional<Dx12Queue> mTransferQueue;
+
+    Dx12Queue mTransferQueue;
+    Dx12Queue mTextureTransitionQueue;
+    Dx12Queue mGraphicsQueue;
+    Dx12Queue mComputeQueue;
+    //Dx12Queue mPresentQueue;
+
+
+
     Microsoft::WRL::ComPtr<IDXGISwapChain4> mSwapChain;
     Microsoft::WRL::ComPtr<ID3D12Resource> mBackBuffers[cNumFramesInFlight];
     //Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> mCommandList;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> mCommandAllocators[cNumFramesInFlight];
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mRTVDescriptorHeap;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> mRenderingBackBuffer;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> mRenderingCommandBuffer;
+    //Microsoft::WRL::ComPtr<ID3D12Resource> mRenderingBackBuffer;
+    //Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> mRenderingCommandBuffer;
+    //uint64_t mUploadCommandBufferFenceValue;
+    //std::array<uint64_t, cNumFramesInFlight> mFrameFenceValues = {};
 
-    uint64_t mUploadCommandBufferFenceValue;
-
-    std::array<uint64_t, cNumFramesInFlight> mFrameFenceValues = {};
     UINT mRTVDescriptorSize;
     UINT mCurrentBackBufferIndex;
 
