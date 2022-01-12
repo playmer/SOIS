@@ -106,6 +106,15 @@ target_include_directories(imgui
 
 target_link_libraries(imgui PUBLIC STB SDL2-static glbinding freetype)
 
+# Android is causing issues on C++20, and due to how target_compile_features interacts with command line order
+# and PUBLIC props, we need to just use target_compile_options directly on Android until the NDK/CMake supports
+# cxx_std_20 properly and not using gnu extensions.
+if (NOT ${CMAKE_SYSTEM_NAME} STREQUAL Android)
+    target_compile_features(imgui PUBLIC cxx_std_17)
+else()
+    target_compile_options(imgui PRIVATE -std=c++17)
+endif()
+
 #####################################
 # ImGuizmo
 #####################################

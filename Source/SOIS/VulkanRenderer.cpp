@@ -250,14 +250,32 @@ namespace SOIS
     }
 
     auto system_info = system_info_ret.value();
-    //if (system_info.is_layer_available("VK_LAYER_LUNARG_api_dump")) {
-    //  instance_builder.enable_layer("VK_LAYER_LUNARG_api_dump");
-    //}
     if (system_info.validation_layers_available) {
       instance_builder.enable_validation_layers();
     }
 
-    auto instance_builder_return = instance_builder.build();
+      unsigned int count;
+      if (!SDL_Vulkan_GetInstanceExtensions(aWindow, &count, nullptr))
+      {
+          printf("Failed to get required Vulkan Instance Extensions from SDL\n");
+          return;
+      }
+
+      std::vector<const char*> extensions;
+      size_t additional_extension_count = extensions.size();
+      extensions.resize(additional_extension_count + count);
+
+      if (!SDL_Vulkan_GetInstanceExtensions(aWindow, &count, extensions.data() + additional_extension_count)) {
+          printf("Failed to get required Vulkan Instance Extensions from SDL\n");
+          return;
+      }
+
+      for (auto& extension : extensions)
+      {
+          instance_builder.enable_extension(extension);
+      }
+
+      auto instance_builder_return = instance_builder.build();
 
     if (!instance_builder_return) {
       printf("Failed to create Vulkan instance. Error: %s\n", instance_builder_return.error().message().c_str());
