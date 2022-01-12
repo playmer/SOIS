@@ -608,8 +608,8 @@ namespace SOIS
       framebuffer_info.renderPass = mRenderPass;
       framebuffer_info.attachmentCount = 1;
       framebuffer_info.pAttachments = attachments;
-      framebuffer_info.width = w;
-      framebuffer_info.height = h;
+      framebuffer_info.width = mSwapchain.extent.width;
+      framebuffer_info.height = mSwapchain.extent.height;
       framebuffer_info.layers = 1;
 
       if (vkCreateFramebuffer(mDevice, &framebuffer_info, nullptr, &mFramebuffers[i]) != VK_SUCCESS) {
