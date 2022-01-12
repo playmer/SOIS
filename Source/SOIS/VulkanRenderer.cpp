@@ -441,7 +441,7 @@ namespace SOIS
     ///////////////////////////////////////
     // Create Allocator
     VmaAllocatorCreateInfo allocatorInfo = {};
-    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_0;
     allocatorInfo.physicalDevice = mPhysicalDevice;
     allocatorInfo.device = mDevice;
     allocatorInfo.instance = mInstance;
