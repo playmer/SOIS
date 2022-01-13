@@ -1,6 +1,7 @@
 #pragma once
 #include <queue>
 
+#include <functional>
 #include "vulkan/vulkan.h"
 
 #include "vk_mem_alloc.h"
@@ -134,14 +135,14 @@ namespace SOIS
 
     VkFence TransitionTextures();
 
-    struct TextureTransferData
-    {
-      VkImage mImage;
-      VkBuffer mUploadBuffer;
-      VmaAllocation mUploadBufferAllocation;
-    };
-
-    std::vector<TextureTransferData> mTexturesCreatedThisFrame;
+    //struct TextureTransferData
+    //{
+    //  VkImage mImage;
+    //  VkBuffer mUploadBuffer;
+    //  VmaAllocation mUploadBufferAllocation;
+    //};
+    //
+    //std::vector<TextureTransferData> mTexturesCreatedThisFrame;
 
 
     struct TextureDestroyer
@@ -152,6 +153,133 @@ namespace SOIS
     };
 
     std::vector<TextureDestroyer> mTexturesToDestroyNextFrame;
+
+
+    std::future<std::unique_ptr<Texture>> LoadTextureFromDataAsync(unsigned char* data, TextureLayout format, int w, int h, int pitch);
+    void UploadThread();
+    struct UploadJob
+    {
+      UploadJob(
+        VulkanRenderer* aRenderer,
+        std::promise<std::unique_ptr<SOIS::Texture>> texturePromise,
+        VkImage image,
+        VkBuffer uploadBuffer,
+        VmaAllocation  uploadBufferAllocation,
+        VkDescriptorSet descriptorSet,
+        VmaAllocation imageAllocation,
+        int aWidth,
+        int aHeight)
+        : mRenderer{ aRenderer }
+        , mVariant{
+          std::move(texturePromise),
+          image,
+          uploadBuffer,
+          uploadBufferAllocation,
+          descriptorSet,
+          imageAllocation,
+          aWidth,
+          aHeight }
+      {
+        mType = UploadType::Texture;
+      }
+
+      UploadJob(VulkanRenderer* aRenderer, VkBuffer aUploadBuffer, VmaAllocation aUploadBufferAllocation)
+        : mRenderer{ aRenderer }
+        , mVariant { aUploadBuffer, aUploadBufferAllocation
+      }
+      {
+        mType = UploadType::Buffer;
+      }
+
+      void operator()(VulkanCommandBuffer aCommandBuffer)
+      {
+        if (UploadType::Texture == mType)
+        {
+
+        }
+      }
+
+      void TextureUpload(VulkanCommandBuffer aCommandBuffer);
+      void BufferUpload(VulkanCommandBuffer aCommandBuffer);
+    
+      struct Texture
+      {
+        ~Texture() {}
+        std::promise<std::unique_ptr<SOIS::Texture>> texturePromise;
+        VkImage mImage;
+        VkBuffer mUploadBuffer;
+        VmaAllocation  mUploadBufferAllocation;
+        VkDescriptorSet mDescriptorSet;
+        VmaAllocation mImageAllocation;
+        int mWidth;
+        int mHeight;
+      };
+    
+      struct Buffer
+      {
+        VkBuffer mUploadBuffer;
+        VmaAllocation mUploadBufferAllocation;
+      };
+    
+      union TextureOrBuffer
+      {
+        Texture mTexture;
+        Buffer mBuffer;
+
+        ~TextureOrBuffer()
+        {
+          //if (UploadType::Texture == mType)
+          //{
+          //
+          //}
+          //else
+          //{
+          //
+          //}
+        }
+
+        TextureOrBuffer(
+          std::promise<std::unique_ptr<SOIS::Texture>> texturePromise,
+          VkImage image,
+          VkBuffer uploadBuffer,
+          VmaAllocation  uploadBufferAllocation,
+          VkDescriptorSet descriptorSet,
+          VmaAllocation imageAllocation,
+          int aWidth,
+          int aHeight)
+          : mTexture{
+             std::move(texturePromise),
+             image,
+             uploadBuffer,
+             uploadBufferAllocation,
+             descriptorSet,
+             imageAllocation,
+             aWidth,
+             aHeight }
+        {
+
+        }
+
+
+        TextureOrBuffer(VkBuffer aUploadBuffer, VmaAllocation aUploadBufferAllocation)
+        {
+
+        }
+      } mVariant;
+    
+      enum class UploadType
+      {
+        Texture,
+        Buffer
+      } mType;
+
+      VulkanRenderer* mRenderer;
+    };
+
+    friend UploadJob;
+    std::queue<UploadJob> mUploadJobs;
+    std::mutex mUploadJobsMutex;
+    std::counting_semaphore<std::numeric_limits<std::ptrdiff_t>::max()> mUploadJobsWakeUp;
 
 
     //void SetupVulkanWindow(ImGui_ImplVulkanH_Window* wd, VkSurfaceKHR surface, int width, int height);

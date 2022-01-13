@@ -3,8 +3,12 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
+#include <future>
+#include <limits>
 #include <memory>
+#include <semaphore>
 #include <string>
+#include <thread>
 #include <vector>
 #include <variant>
 #include <unordered_map>
@@ -670,6 +674,7 @@ namespace SOIS
 
   protected:
     std::unordered_map<std::string, std::unique_ptr<GPUAllocator>> mAllocators;
+    std::thread mUploadThread;
   };
 
   namespace GPUAllocation

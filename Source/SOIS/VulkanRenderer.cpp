@@ -174,6 +174,7 @@ namespace SOIS
   //////////////////////////////////////////////////////////////////////////////////////////////
   // Renderer
   VulkanRenderer::VulkanRenderer()
+    : mUploadJobsWakeUp{0}
   {
 
   }
@@ -492,6 +493,16 @@ namespace SOIS
     init_info.ImageCount = cMinImageCount;
     init_info.CheckVkResultFn = check_vk_result;
     ImGui_ImplVulkan_Init(&init_info, mRenderPass);
+
+    mUploadThread = std::thread([this]()
+      {
+        UploadThread();
+      });
+  }
+
+  void VulkanRenderer::UploadThread()
+  {
+
   }
 
 
@@ -964,5 +975,192 @@ namespace SOIS
     mTexturesCreatedThisFrame.clear();
 
     return fence;
+  }
+
+  std::future<std::unique_ptr<Texture>> VulkanRenderer::LoadTextureFromDataAsync(unsigned char* data, TextureLayout format, int aWidth, int aHeight, int pitch)
+  {
+    size_t upload_size = aHeight * pitch;
+
+    VkResult err;
+
+    VkImage image;
+    VmaAllocation imageAllocation;
+    VmaAllocationInfo imageAllocationInfo;
+    VkImageView imageView;
+    VkBuffer uploadBuffer;
+    VmaAllocation uploadBufferAllocation;
+    VkDescriptorSet descriptorSet;
+
+    // Create Descriptor Set:
+    {
+      VkDescriptorSetAllocateInfo alloc_info = {};
+      alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+      alloc_info.descriptorPool = mDescriptorPool;
+      alloc_info.descriptorSetCount = 1;
+      alloc_info.pSetLayouts = &mDescriptorSetLayout;
+      err = vkAllocateDescriptorSets(mDevice.device, &alloc_info, &descriptorSet);
+      check_vk_result(err);
+    }
+
+    // Create the Image:
+    {
+      VmaAllocationCreateInfo allocInfo = {};
+      allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+      VkImageCreateInfo info = {};
+      info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+      info.imageType = VK_IMAGE_TYPE_2D;
+      info.format = VK_FORMAT_R8G8B8A8_UNORM;
+      info.extent.width = aWidth;
+      info.extent.height = aHeight;
+      info.extent.depth = 1;
+      info.mipLevels = 1;
+      info.arrayLayers = 1;
+      info.samples = VK_SAMPLE_COUNT_1_BIT;
+      info.tiling = VK_IMAGE_TILING_OPTIMAL;
+      info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+      info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+      info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      err = vmaCreateImage(mAllocator, &info, &allocInfo, &image, &imageAllocation, &imageAllocationInfo);
+      check_vk_result(err);
+    }
+
+    // Create the Image View:
+    {
+      VkImageViewCreateInfo info = {};
+      info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+      info.image = image;
+      info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+      info.format = VK_FORMAT_R8G8B8A8_UNORM;
+      info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      info.subresourceRange.levelCount = 1;
+      info.subresourceRange.layerCount = 1;
+      err = vkCreateImageView(mDevice.device, &info, mDevice.allocation_callbacks, &imageView);
+      check_vk_result(err);
+    }
+
+    // Update the Descriptor Set:
+    {
+      VkDescriptorImageInfo desc_image[1] = {};
+      desc_image[0].sampler = mFontSampler;
+      desc_image[0].imageView = imageView;
+      desc_image[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      VkWriteDescriptorSet write_desc[1] = {};
+      write_desc[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      write_desc[0].dstSet = descriptorSet;
+      write_desc[0].descriptorCount = 1;
+      write_desc[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      write_desc[0].pImageInfo = desc_image;
+      vkUpdateDescriptorSets(mDevice.device, 1, write_desc, 0, NULL);
+    }
+
+    // Create the Upload Buffer:
+    {
+      VmaAllocationCreateInfo allocInfo = {};
+      allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+      VkBufferCreateInfo buffer_info = {};
+      buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+      buffer_info.size = upload_size;
+      buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+      buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+      err = vmaCreateBuffer(mAllocator, &buffer_info, &allocInfo, &uploadBuffer, &uploadBufferAllocation, nullptr);
+      check_vk_result(err);
+    }
+
+    // Upload to Buffer:
+    {
+      void* map;
+      vmaMapMemory(mAllocator, uploadBufferAllocation, &map);
+      memcpy(map, data, upload_size);
+      vmaUnmapMemory(mAllocator, uploadBufferAllocation);
+    }
+
+    std::promise<std::unique_ptr<SOIS::Texture>> texturePromise;
+    std::future<std::unique_ptr<SOIS::Texture>> textureFuture = texturePromise.get_future();
+
+    auto job = [
+      this, 
+        texturePromise = std::move(texturePromise),
+        image, 
+        uploadBuffer, 
+        uploadBufferAllocation, 
+        descriptorSet, 
+        imageAllocation, 
+        aWidth, 
+        aHeight](VulkanCommandBuffer aCommandBuffer) mutable
+    {
+      };
+
+    std::unique_lock lock{ mUploadJobsMutex };
+    mUploadJobs.emplace(std::move(job));
+
+    return textureFuture;
+  }
+
+
+  void VulkanRenderer::UploadJob::TextureUpload(VulkanCommandBuffer aCommandBuffer)
+  {
+    auto& texture = mVariant.mTexture;
+
+    // Begin command buffer
+    {
+      VkCommandBufferBeginInfo begin_info = {};
+      begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+      begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+      auto err = vkBeginCommandBuffer(aCommandBuffer.mBuffer, &begin_info);
+      check_vk_result(err);
+    }
+
+    // Copy to Image:
+    {
+      VkImageMemoryBarrier copy_barrier[1] = {};
+      copy_barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+      copy_barrier[0].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+      copy_barrier[0].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      copy_barrier[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+      copy_barrier[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      copy_barrier[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      copy_barrier[0].image = mVariant.mTexture.mImage;
+      copy_barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      copy_barrier[0].subresourceRange.levelCount = 1;
+      copy_barrier[0].subresourceRange.layerCount = 1;
+      vkCmdPipelineBarrier(aCommandBuffer.mBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, copy_barrier);
+
+      VkBufferImageCopy region = {};
+      region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      region.imageSubresource.layerCount = 1;
+      region.imageExtent.width = mVariant.mTexture.mWidth;
+      region.imageExtent.height = mVariant.mTexture.mHeight;
+      region.imageExtent.depth = 1;
+      vkCmdCopyBufferToImage(aCommandBuffer.mBuffer, mVariant.mTexture.mUploadBuffer, mVariant.mTexture.mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+
+      //mRenderer->mTexturesCreatedThisFrame.emplace_back(TextureTransferData{ texture.mImage, texture.mUploadBuffer, texture.mUploadBufferAllocation });
+    }
+
+    // Submit command buffer
+    {
+      VkSubmitInfo end_info = {};
+      end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+      end_info.commandBufferCount = 1;
+      end_info.pCommandBuffers = &aCommandBuffer.mBuffer;
+      auto err = vkEndCommandBuffer(aCommandBuffer.mBuffer);
+      check_vk_result(err);
+      err = vkQueueSubmit(mTransferQueue, 1, &end_info, aCommandBuffer.mFence);
+      check_vk_result(err);
+    }
+
+    vkWaitForFences(mRenderer->mDevice.device, 1, &aCommandBuffer.mFence, true, UINT64_MAX);
+    auto texture = std::make_unique<VulkanTexture>(this, texture.mImage, texture.mDescriptorSet, texture.mImageAllocation, texture.mWidth, texture.mHeight);
+    std::unique_ptr<SOIS::Texture> test = std::move(texture);
+    texturePromise.set_value(std::move(test));
+
+    // We've gotta make sure this gets destructed, because the variant won't know how to.
+    mVariant.mTexture.~Texture();
+  }
+
+  void VulkanRenderer::UploadJob::BufferUpload(VulkanCommandBuffer aBuffer)
+  {
+
   }
 }
