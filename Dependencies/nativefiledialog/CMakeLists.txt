@@ -23,6 +23,10 @@ elseif(UNIX) # Probably should defend against Cygwin here but....
     PRIVATE
         repo/src/nfd_gtk.c
     )
+
+    find_package(GTK2 REQUIRED)
+    target_include_directories(nativefiledialog PRIVATE ${GTK2_INCLUDE_DIRS})
+    target_link_libraries(nativefiledialog PRIVATE ${GTK2_LIBRARIES})
 endif()
 
 target_include_directories(nativefiledialog 

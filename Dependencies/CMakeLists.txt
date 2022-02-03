@@ -28,7 +28,12 @@ target_sources(glm INTERFACE
 )
 
 add_subdirectory(nativefiledialog)
-add_subdirectory(SDL)
+
+if (NOT UNIX OR APPLE)
+    add_subdirectory(SDL)
+else()
+    find_package(SDL2 REQUIRED)
+endif()
 
 #####################################
 # ImGui
@@ -69,7 +74,14 @@ target_include_directories(imgui
         ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiSource/backends/
 )
 
-target_link_libraries(imgui PUBLIC STB SDL2-static glbinding freetype)
+target_link_libraries(imgui PUBLIC STB glbinding freetype)
+
+if (NOT UNIX OR APPLE)
+    target_link_libraries(imgui PUBLIC SDL2-static)
+else()
+    target_link_libraries(imgui PUBLIC ${SDL2_LIBRARY})
+    target_include_directories(imgui PUBLIC ${SDL2_INCLUDE_DIR})
+endif()
 
 #####################################
 # ImGuizmo

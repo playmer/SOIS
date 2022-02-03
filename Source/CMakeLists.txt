@@ -10,7 +10,6 @@ PUBLIC
 
 target_link_libraries(SOIS 
 PUBLIC 
-    SDL2-static
     SDL2main
     glm::glm
     imgui
