@@ -185,10 +185,26 @@ namespace SOIS
 
       UploadJob(VulkanRenderer* aRenderer, VkBuffer aUploadBuffer, VmaAllocation aUploadBufferAllocation)
         : mRenderer{ aRenderer }
-        , mVariant { aUploadBuffer, aUploadBufferAllocation
-      }
+        , mVariant { aUploadBuffer, aUploadBufferAllocation }
       {
         mType = UploadType::Buffer;
+      }
+
+      UploadJob(UploadJob&& aJob)
+        : mRenderer { aJob.mRenderer }
+        , mVariant{ true }
+      {
+        switch (aJob.mType)
+        {
+          case UploadType::Buffer:
+          {
+            break;
+          }
+          case UploadType::Texture:
+          {
+            break;
+          }
+        }
       }
 
       void operator()(VulkanCommandBuffer aCommandBuffer)
@@ -221,57 +237,63 @@ namespace SOIS
         VmaAllocation mUploadBufferAllocation;
       };
     
-      union TextureOrBuffer
-      {
-        Texture mTexture;
-        Buffer mBuffer;
-
-        ~TextureOrBuffer()
-        {
-          //if (UploadType::Texture == mType)
-          //{
-          //
-          //}
-          //else
-          //{
-          //
-          //}
-        }
-
-        TextureOrBuffer(
-          std::promise<std::unique_ptr<SOIS::Texture>> texturePromise,
-          VkImage image,
-          VkBuffer uploadBuffer,
-          VmaAllocation  uploadBufferAllocation,
-          VkDescriptorSet descriptorSet,
-          VmaAllocation imageAllocation,
-          int aWidth,
-          int aHeight)
-          : mTexture{
-             std::move(texturePromise),
-             image,
-             uploadBuffer,
-             uploadBufferAllocation,
-             descriptorSet,
-             imageAllocation,
-             aWidth,
-             aHeight }
-        {
-
-        }
-
-
-        TextureOrBuffer(VkBuffer aUploadBuffer, VmaAllocation aUploadBufferAllocation)
-        {
-
-        }
-      } mVariant;
-    
-      enum class UploadType
-      {
-        Texture,
-        Buffer
-      } mType;
+      //union UploadVarient
+      //{
+      //  Texture mTexture;
+      //  Buffer mBuffer;
+      //  bool mEmpty; // This is what we use to construct an empty job;
+      //
+      //  ~UploadVarient()
+      //  {
+      //    //if (UploadType::Texture == mType)
+      //    //{
+      //    //
+      //    //}
+      //    //else
+      //    //{
+      //    //
+      //    //}
+      //  }
+      //
+      //
+      //  UploadVarient(bool /*aEmpty*/)
+      //  {
+      //
+      //  }
+      //
+      //  UploadVarient(
+      //    std::promise<std::unique_ptr<SOIS::Texture>> texturePromise,
+      //    VkImage image,
+      //    VkBuffer uploadBuffer,
+      //    VmaAllocation  uploadBufferAllocation,
+      //    VkDescriptorSet descriptorSet,
+      //    VmaAllocation imageAllocation,
+      //    int aWidth,
+      //    int aHeight)
+      //    : mTexture{
+      //       std::move(texturePromise),
+      //       image,
+      //       uploadBuffer,
+      //       uploadBufferAllocation,
+      //       descriptorSet,
+      //       imageAllocation,
+      //       aWidth,
+      //       aHeight }
+      //  {
+      //
+      //  }
+      //
+      //
+      //  UploadVarient(VkBuffer aUploadBuffer, VmaAllocation aUploadBufferAllocation)
+      //  {
+      //
+      //  }
+      //} mVariant;
+      //enum class UploadType
+      //{
+      //  Texture,
+      //  Buffer
+      //} mType;
 
       VulkanRenderer* mRenderer;
     };

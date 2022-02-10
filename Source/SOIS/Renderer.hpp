@@ -675,6 +675,7 @@ namespace SOIS
   protected:
     std::unordered_map<std::string, std::unique_ptr<GPUAllocator>> mAllocators;
     std::thread mUploadThread;
+    std::atomic_bool mShouldJoin;
   };
 
   namespace GPUAllocation
