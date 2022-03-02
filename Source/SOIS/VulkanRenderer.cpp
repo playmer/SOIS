@@ -301,15 +301,15 @@ namespace SOIS
     // All the devices we could support. Right now we just print them out, but we may wish
     // to eventually pipe this up to the application layer.
     {
-      auto potential_physical_devices_return = phys_device_selector.get_suitable_devices(true);
+      auto potential_physical_devices_return = phys_device_selector.select_device_names(vkb::DeviceSelectionMode::partially_and_fully_suitable);
       if (!potential_physical_devices_return) 
       {
         printf("Failed to select Vulkan Physical Device. Error: %s\n", potential_physical_devices_return.error().message().c_str());
       }
 
-      for (auto& physical_device : potential_physical_devices_return.value())
+      for (auto& physicalDeviceName : potential_physical_devices_return.value())
       {
-        printf("Physical Device Name: %s\n", physical_device.properties.deviceName);
+        printf("Physical Device Name: %s\n", physicalDeviceName.c_str());
       }
     }
 
@@ -334,19 +334,16 @@ namespace SOIS
     // Finally, we attempt to let the user select a particular GPU
     if (nullptr != aPreferredGpu)
     {
-      phys_device_selector.set_required_device_name((char const*)aPreferredGpu);
-
-      auto physical_device_selector_return = phys_device_selector.select();
-      if (!physical_device_selector_return) 
+      std::string preferredGpuName = (char const*)aPreferredGpu;
+      phys_device_selector.set_name(preferredGpuName);
+      auto potential_physical_devices_return = phys_device_selector.select(vkb::DeviceSelectionMode::partially_and_fully_suitable);
+      if (!potential_physical_devices_return)
       {
-        printf("Failed to select Vulkan Physical Device named \"%s\", falling back to \"%s\". Error: %s\n", 
-          (char const*)aPreferredGpu,
-          mPhysicalDevice.properties.deviceName,
-          physical_device_selector_return.error().message().c_str());
+        printf("Failed to select Vulkan Physical Device. Error: %s\n", potential_physical_devices_return.error().message().c_str());
       }
       else
       {
-        mPhysicalDevice = physical_device_selector_return.value();
+        mPhysicalDevice = potential_physical_devices_return.value();
       }
     }
 
