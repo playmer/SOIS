@@ -34,6 +34,9 @@ namespace SOIS
       return mBuffer;
     }
 
+    void Begin();
+    void End();
+
     VkCommandBuffer mBuffer;
     VkFence mFence;
     VkSemaphore mAvailableSemaphore;
@@ -80,6 +83,8 @@ namespace SOIS
 
     uint32_t GetQueueFamily();
 
+    void Submit(VulkanCommandBuffer aCommandList);
+
   private:
 
     vkb::Device mDevice;
@@ -119,7 +124,7 @@ namespace SOIS
 
     void ClearRenderTarget(glm::vec4 aClearColor) override;
 
-    void Upload() override;
+    void Upload() override {}
     void RenderImguiData() override;
     void Present() override;
 
@@ -168,59 +173,18 @@ namespace SOIS
         VkDescriptorSet descriptorSet,
         VmaAllocation imageAllocation,
         int aWidth,
-        int aHeight)
-        : mRenderer{ aRenderer }
-        , mVariant{
-          std::move(texturePromise),
-          image,
-          uploadBuffer,
-          uploadBufferAllocation,
-          descriptorSet,
-          imageAllocation,
-          aWidth,
-          aHeight }
-      {
-        mType = UploadType::Texture;
-      }
+        int aHeight);
 
-      UploadJob(VulkanRenderer* aRenderer, VkBuffer aUploadBuffer, VmaAllocation aUploadBufferAllocation)
-        : mRenderer{ aRenderer }
-        , mVariant { aUploadBuffer, aUploadBufferAllocation }
-      {
-        mType = UploadType::Buffer;
-      }
+      UploadJob(VulkanRenderer* aRenderer, VkBuffer aUploadBuffer, VmaAllocation aUploadBufferAllocation);
 
-      UploadJob(UploadJob&& aJob)
-        : mRenderer { aJob.mRenderer }
-        , mVariant{ true }
-      {
-        switch (aJob.mType)
-        {
-          case UploadType::Buffer:
-          {
-            break;
-          }
-          case UploadType::Texture:
-          {
-            break;
-          }
-        }
-      }
+      UploadJob(UploadJob&&) = default;
+      UploadJob(UploadJob&) = default;
 
-      void operator()(VulkanCommandBuffer aCommandBuffer)
-      {
-        if (UploadType::Texture == mType)
-        {
+      std::optional<UploadJob> operator()(VulkanCommandBuffer aCommandBuffer);
+      void FulfillPromise();
 
-        }
-      }
-
-      void TextureUpload(VulkanCommandBuffer aCommandBuffer);
-      void BufferUpload(VulkanCommandBuffer aCommandBuffer);
-    
       struct Texture
       {
-        ~Texture() {}
         std::promise<std::unique_ptr<SOIS::Texture>> texturePromise;
         VkImage mImage;
         VkBuffer mUploadBuffer;
@@ -230,76 +194,31 @@ namespace SOIS
         int mWidth;
         int mHeight;
       };
+
+      struct TextureTransition
+      {
+        std::promise<std::unique_ptr<SOIS::Texture>> texturePromise;
+        VkImage mImage;
+        VkBuffer mUploadBuffer;
+        VmaAllocation  mUploadBufferAllocation;
+      };
     
       struct Buffer
       {
         VkBuffer mUploadBuffer;
         VmaAllocation mUploadBufferAllocation;
       };
-    
-      //union UploadVarient
-      //{
-      //  Texture mTexture;
-      //  Buffer mBuffer;
-      //  bool mEmpty; // This is what we use to construct an empty job;
-      //
-      //  ~UploadVarient()
-      //  {
-      //    //if (UploadType::Texture == mType)
-      //    //{
-      //    //
-      //    //}
-      //    //else
-      //    //{
-      //    //
-      //    //}
-      //  }
-      //
-      //
-      //  UploadVarient(bool /*aEmpty*/)
-      //  {
-      //
-      //  }
-      //
-      //  UploadVarient(
-      //    std::promise<std::unique_ptr<SOIS::Texture>> texturePromise,
-      //    VkImage image,
-      //    VkBuffer uploadBuffer,
-      //    VmaAllocation  uploadBufferAllocation,
-      //    VkDescriptorSet descriptorSet,
-      //    VmaAllocation imageAllocation,
-      //    int aWidth,
-      //    int aHeight)
-      //    : mTexture{
-      //       std::move(texturePromise),
-      //       image,
-      //       uploadBuffer,
-      //       uploadBufferAllocation,
-      //       descriptorSet,
-      //       imageAllocation,
-      //       aWidth,
-      //       aHeight }
-      //  {
-      //
-      //  }
-      //
-      //
-      //  UploadVarient(VkBuffer aUploadBuffer, VmaAllocation aUploadBufferAllocation)
-      //  {
-      //
-      //  }
-      //} mVariant;
-      //enum class UploadType
-      //{
-      //  Texture,
-      //  Buffer
-      //} mType;
+
+      void TextureUpload(VulkanCommandBuffer aCommandBuffer, Texture* aTexture);
+      void BufferUpload(VulkanCommandBuffer aCommandBuffer, Buffer* aBuffer);
+      void TextureTransitionTask(VulkanCommandBuffer aCommandBuffer, TextureTransition* aTextureTransition);
 
       VulkanRenderer* mRenderer;
+      std::variant<Texture, Buffer> mVariant;
     };
 
     friend UploadJob;
-    std::queue<UploadJob> mUploadJobs;
+    std::vector<UploadJob> mUploadJobs;
     std::mutex mUploadJobsMutex;
     std::counting_semaphore<std::numeric_limits<std::ptrdiff_t>::max()> mUploadJobsWakeUp;
 
