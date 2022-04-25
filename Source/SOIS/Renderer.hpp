@@ -658,7 +658,9 @@ namespace SOIS
 
 
     virtual std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) = 0;
+    virtual std::future<std::unique_ptr<Texture>> LoadTextureFromDataAsync(unsigned char* data, TextureLayout format, int w, int h, int pitch);
     std::unique_ptr<Texture> LoadTextureFromFile(std::u8string const& aFile);
+    std::future<std::unique_ptr<Texture>> LoadTextureFromFileAsync(std::u8string const& aFile);
 
     virtual GPUAllocator* MakeAllocator(std::string const& aAllocatorType, size_t aBlockSize)
     {

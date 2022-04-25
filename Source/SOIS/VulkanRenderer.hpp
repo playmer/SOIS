@@ -130,7 +130,7 @@ namespace SOIS
 
     SDL_WindowFlags GetAdditionalWindowFlags() override;
 
-    std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) override;
+    std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) override { return nullptr;  };
 
 
     void RecreateSwapchain();
@@ -164,28 +164,9 @@ namespace SOIS
     void UploadThread();
     struct UploadJob
     {
-      UploadJob(
-        VulkanRenderer* aRenderer,
-        std::promise<std::unique_ptr<SOIS::Texture>> texturePromise,
-        VkImage image,
-        VkBuffer uploadBuffer,
-        VmaAllocation  uploadBufferAllocation,
-        VkDescriptorSet descriptorSet,
-        VmaAllocation imageAllocation,
-        int aWidth,
-        int aHeight);
-
-      UploadJob(VulkanRenderer* aRenderer, VkBuffer aUploadBuffer, VmaAllocation aUploadBufferAllocation);
-
-      UploadJob(UploadJob&&) = default;
-      UploadJob(UploadJob&) = default;
-
-      std::optional<UploadJob> operator()(VulkanCommandBuffer aCommandBuffer);
-      void FulfillPromise();
-
       struct Texture
       {
-        std::promise<std::unique_ptr<SOIS::Texture>> texturePromise;
+        std::promise<std::unique_ptr<SOIS::Texture>> mTexturePromise;
         VkImage mImage;
         VkBuffer mUploadBuffer;
         VmaAllocation  mUploadBufferAllocation;
@@ -197,38 +178,57 @@ namespace SOIS
 
       struct TextureTransition
       {
-        std::promise<std::unique_ptr<SOIS::Texture>> texturePromise;
+        std::promise<std::unique_ptr<SOIS::Texture>> mTexturePromise;
         VkImage mImage;
         VkBuffer mUploadBuffer;
         VmaAllocation  mUploadBufferAllocation;
+        VkDescriptorSet mDescriptorSet;
+        VmaAllocation mImageAllocation;
+        int mWidth;
+        int mHeight;
       };
-    
+
       struct Buffer
       {
         VkBuffer mUploadBuffer;
         VmaAllocation mUploadBufferAllocation;
       };
 
+      UploadJob(
+        VulkanRenderer* aRenderer,
+        std::promise<std::unique_ptr<SOIS::Texture>> texturePromise,
+        VkImage image,
+        VkBuffer uploadBuffer,
+        VmaAllocation  uploadBufferAllocation,
+        VkDescriptorSet descriptorSet,
+        VmaAllocation imageAllocation,
+        int aWidth,
+        int aHeight);
+
+      UploadJob(
+        VulkanRenderer* aRenderer,
+        TextureTransition aTextureTransition);
+
+      UploadJob(VulkanRenderer* aRenderer, VkBuffer aUploadBuffer, VmaAllocation aUploadBufferAllocation);
+
+      UploadJob(UploadJob&&) = default;
+      UploadJob(UploadJob&) = default;
+
+      std::optional<UploadJob> operator()(VulkanCommandBuffer aCommandBuffer);
+      void FulfillPromise();
+
       void TextureUpload(VulkanCommandBuffer aCommandBuffer, Texture* aTexture);
       void BufferUpload(VulkanCommandBuffer aCommandBuffer, Buffer* aBuffer);
       void TextureTransitionTask(VulkanCommandBuffer aCommandBuffer, TextureTransition* aTextureTransition);
 
       VulkanRenderer* mRenderer;
-      std::variant<Texture, Buffer> mVariant;
+      std::variant<Texture, TextureTransition, Buffer> mVariant;
     };
 
     friend UploadJob;
     std::vector<UploadJob> mUploadJobs;
     std::mutex mUploadJobsMutex;
     std::counting_semaphore<std::numeric_limits<std::ptrdiff_t>::max()> mUploadJobsWakeUp;
-
-
-    //void SetupVulkanWindow(ImGui_ImplVulkanH_Window* wd, VkSurfaceKHR surface, int width, int height);
-    //void FrameRender(ImGui_ImplVulkanH_Window* wd, ImDrawData* draw_data);
-    //void FramePresent(ImGui_ImplVulkanH_Window* wd);
-    //void CleanupVulkan();
-    //void CleanupVulkanWindow();
-
 
     static constexpr uint32_t cMinImageCount = 3;
 
@@ -257,14 +257,6 @@ namespace SOIS
     VkRenderPass mRenderPass;
 
     SDL_Window* mWindow;
-
-    //VkCommandPool command_pool;
-    //std::vector<VkCommandBuffer> command_buffers;
-
-    //std::vector<VkSemaphore> available_semaphores;
-    //std::vector<VkSemaphore> finished_semaphore;
-    //std::vector<VkFence> in_flight_fences;
-    //std::vector<VkFence> image_in_flight;
 
     size_t mCurrentFrame = 0;
     uint32_t mImageIndex = 0;

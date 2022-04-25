@@ -215,6 +215,7 @@ namespace SOIS
   VulkanRenderer::~VulkanRenderer()
   {
     mShouldJoin = true;
+    mUploadJobsWakeUp.release();
     mUploadThread.join();
     auto err = vkDeviceWaitIdle(mDevice);
     check_vk_result(err);
@@ -223,9 +224,11 @@ namespace SOIS
     // If there are textures left to destroy, take care of them:
     for (auto& textureToDestroy : mTexturesToDestroyNextFrame)
     {
+      printf("Destroy image %p, allocation %p\n", textureToDestroy.mImage, textureToDestroy.mImageAllocation);
       vmaDestroyImage(mAllocator, textureToDestroy.mImage, textureToDestroy.mImageAllocation);
     }
 
+    printf("Destroy allocator %p\n", mAllocator);
     vmaDestroyAllocator(mAllocator);
   }
 
@@ -480,6 +483,7 @@ namespace SOIS
     allocatorInfo.instance = mInstance;
 
     vmaCreateAllocator(&allocatorInfo, &mAllocator);
+    printf("Create allocator %p\n", mAllocator);
 
     ///////////////////////////////////////
     // Create Render Pass
@@ -559,6 +563,14 @@ namespace SOIS
   {
   }
 
+  VulkanRenderer::UploadJob::UploadJob(
+    VulkanRenderer* aRenderer,
+    TextureTransition aTextureTransition)
+    : mRenderer{ aRenderer }
+    , mVariant{ std::move(aTextureTransition) }
+  {
+  }
+
   VulkanRenderer::UploadJob::UploadJob(VulkanRenderer* aRenderer, VkBuffer aUploadBuffer, VmaAllocation aUploadBufferAllocation)
     : mRenderer{ aRenderer }
     , mVariant{ Buffer{ aUploadBuffer, aUploadBufferAllocation } }
@@ -568,11 +580,23 @@ namespace SOIS
 
   std::optional<VulkanRenderer::UploadJob> VulkanRenderer::UploadJob::operator()(VulkanCommandBuffer aCommandBuffer)
   {
-    std::visit([this, aCommandBuffer](auto&& arg) {
+    return std::visit([this, aCommandBuffer](auto&& arg) -> std::optional<VulkanRenderer::UploadJob> {
       using T = std::decay_t<decltype(arg)>;
       if constexpr (std::is_same_v<T, Texture>)
       {
         TextureUpload(aCommandBuffer, &arg);
+
+        return UploadJob(mRenderer, 
+          TextureTransition{ 
+            std::move(arg.mTexturePromise), 
+            arg.mImage, 
+            arg.mUploadBuffer, 
+            arg.mUploadBufferAllocation,
+            arg.mDescriptorSet,
+            arg.mImageAllocation,
+            arg.mWidth,
+            arg.mHeight
+          });
       }
       else if constexpr (std::is_same_v<T, TextureTransition>)
         TextureTransitionTask(aCommandBuffer, &arg);
@@ -580,9 +604,9 @@ namespace SOIS
         BufferUpload(aCommandBuffer, &arg);
       else
         static_assert(always_false_v<T>, "non-exhaustive visitor!");
-      }, mVariant);
 
-    return std::nullopt;
+      return std::nullopt;
+      }, mVariant);
   }
 
   void VulkanRenderer::UploadJob::FulfillPromise()
@@ -595,7 +619,7 @@ namespace SOIS
       }
       else if constexpr (std::is_same_v<T, TextureTransition>)
       {
-        
+        arg.mTexturePromise.set_value(std::make_unique<VulkanTexture>(mRenderer, arg.mImage, arg.mDescriptorSet, arg.mImageAllocation, arg.mWidth, arg.mHeight));
       }
       else if constexpr (std::is_same_v<T, Buffer>)
       {
@@ -635,6 +659,11 @@ namespace SOIS
       transferCommandList.End();
       mTransferQueue.Submit(transferCommandList);
 
+      if (VK_NULL_HANDLE != transferCommandList.mFence)
+      {
+        vkWaitForFences(mDevice.device, 1, &transferCommandList.mFence, true, UINT64_MAX);
+      }
+
       // Fulfill promises
       for (auto& job : uploads)
       {
@@ -646,12 +675,6 @@ namespace SOIS
       auto transitionCommandList = mTextureTransitionQueue.WaitOnNextCommandList();
     
       transitionCommandList.Begin();
-    
-      if (false == mLoadedFontTexture)
-      {
-        ImGui_ImplVulkan_CreateFontsTexture(transitionCommandList.mBuffer);
-        mLoadedFontTexture = true;
-      }
 
       for (auto& textureTransfer : transitions)
       {
@@ -660,6 +683,17 @@ namespace SOIS
 
       transitionCommandList.End();
       mTextureTransitionQueue.Submit(transitionCommandList);
+
+      if (VK_NULL_HANDLE != transitionCommandList.mFence)
+      {
+        vkWaitForFences(mDevice.device, 1, &transitionCommandList.mFence, true, UINT64_MAX);
+      }
+
+      // Fulfill promises
+      for (auto& job : transitions)
+      {
+        job.FulfillPromise();
+      }
     
       /////////////////////////////////////////////
       // End
@@ -722,10 +756,13 @@ namespace SOIS
   {
     ImGui_ImplVulkan_NewFrame();
 
-    auto [commandBuffer, fence, waitSemaphore, signalSemphore] = mGraphicsQueue.WaitOnNextCommandList();
+    //auto [commandBuffer, fence, waitSemaphore, signalSemphore] = mGraphicsQueue.WaitOnNextCommandList();
+    auto vulkanCommandBuffer = mGraphicsQueue.WaitOnNextCommandList();
+    auto [commandBuffer, fence, waitSemaphore, signalSemphore] = vulkanCommandBuffer;
 
     for (auto& textureToDestroy : mTexturesToDestroyNextFrame)
     {
+      printf("Destroy image %p, allocation %p\n", textureToDestroy.mImage, textureToDestroy.mImageAllocation);
       vmaDestroyImage(mAllocator, textureToDestroy.mImage, textureToDestroy.mImageAllocation);
     }
     mTexturesToDestroyNextFrame.clear();
@@ -737,6 +774,24 @@ namespace SOIS
       waitSemaphore,
       VK_NULL_HANDLE,
       &mImageIndex);
+
+    if (false == mLoadedFontTexture)
+    {
+      vulkanCommandBuffer.Begin();
+      ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
+      vulkanCommandBuffer.End();
+      mGraphicsQueue.Submit(vulkanCommandBuffer);
+      vkWaitForFences(mDevice.device, 1, &fence, true, UINT64_MAX);
+
+      mLoadedFontTexture = true;
+      
+      auto nextCommandList = mGraphicsQueue.WaitOnNextCommandList();
+
+      commandBuffer = nextCommandList.mBuffer;
+      fence = nextCommandList.mFence;
+      waitSemaphore = nextCommandList.mAvailableSemaphore;
+      signalSemphore = nextCommandList.mFinishedSemaphore;
+    }
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
       return RecreateSwapchain();
@@ -835,7 +890,7 @@ namespace SOIS
   void VulkanRenderer::Present()
   {
     auto [commandList, fence, waitSemaphore, signalSemphore] = mGraphicsQueue.GetCurrentCommandList();
-    auto [_1, transitionFence, _3, _4] = mTextureTransitionQueue.GetCurrentCommandList();
+    //auto [_1, transitionFence, _3, _4] = mTextureTransitionQueue.GetCurrentCommandList();
 
     vkCmdEndRenderPass(commandList);
     vkEndCommandBuffer(commandList);
@@ -858,10 +913,10 @@ namespace SOIS
 
     vkResetFences(mDevice, 1, &fence);
 
-    if (VK_NULL_HANDLE != transitionFence)
-    {
-      vkWaitForFences(mDevice.device, 1, &transitionFence, true, UINT64_MAX);
-    }
+    //if (VK_NULL_HANDLE != transitionFence)
+    //{
+    //  vkWaitForFences(mDevice.device, 1, &transitionFence, true, UINT64_MAX);
+    //}
 
     if (vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, fence) != VK_SUCCESS) {
       printf("failed to submit draw command buffer\n");
@@ -1028,6 +1083,8 @@ namespace SOIS
       info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
       err = vmaCreateImage(mAllocator, &info, &allocInfo, &image, &imageAllocation, &imageAllocationInfo);
       check_vk_result(err);
+
+      printf("Create image %p, allocation %p\n", image, imageAllocation);
     }
 
     // Create the Image View:
@@ -1071,6 +1128,8 @@ namespace SOIS
       buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
       err = vmaCreateBuffer(mAllocator, &buffer_info, &allocInfo, &uploadBuffer, &uploadBufferAllocation, nullptr);
       check_vk_result(err);
+
+      printf("Create buffer %p, allocation %p\n", uploadBuffer, uploadBufferAllocation);
     }
 
     // Upload to Buffer:
@@ -1084,17 +1143,20 @@ namespace SOIS
     std::promise<std::unique_ptr<SOIS::Texture>> texturePromise;
     std::future<std::unique_ptr<SOIS::Texture>> textureFuture = texturePromise.get_future();
 
-    std::unique_lock lock{ mUploadJobsMutex };
-    mUploadJobs.emplace_back(
-      this,
-      std::move(texturePromise),
-      image,
-      uploadBuffer,
-      uploadBufferAllocation,
-      descriptorSet,
-      imageAllocation,
-      aWidth,
-      aHeight);
+    {
+      std::unique_lock lock{ mUploadJobsMutex };
+      mUploadJobs.emplace_back(
+        this,
+        std::move(texturePromise),
+        image,
+        uploadBuffer,
+        uploadBufferAllocation,
+        descriptorSet,
+        imageAllocation,
+        aWidth,
+        aHeight);
+    }
+    mUploadJobsWakeUp.release(1);
 
     return textureFuture;
   }
@@ -1102,38 +1164,27 @@ namespace SOIS
 
   void VulkanRenderer::UploadJob::TextureUpload(VulkanCommandBuffer aCommandBuffer, Texture* aTexture)
   {
-    // Begin command buffer
-    {
-      VkCommandBufferBeginInfo begin_info = {};
-      begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-      begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-      auto err = vkBeginCommandBuffer(aCommandBuffer.mBuffer, &begin_info);
-      check_vk_result(err);
-    }
-
     // Copy to Image:
-    {
-      VkImageMemoryBarrier copy_barrier[1] = {};
-      copy_barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-      copy_barrier[0].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-      copy_barrier[0].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-      copy_barrier[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-      copy_barrier[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      copy_barrier[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      copy_barrier[0].image = aTexture->mImage;
-      copy_barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      copy_barrier[0].subresourceRange.levelCount = 1;
-      copy_barrier[0].subresourceRange.layerCount = 1;
-      vkCmdPipelineBarrier(aCommandBuffer.mBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, copy_barrier);
+    VkImageMemoryBarrier copy_barrier[1] = {};
+    copy_barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    copy_barrier[0].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    copy_barrier[0].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    copy_barrier[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    copy_barrier[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    copy_barrier[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    copy_barrier[0].image = aTexture->mImage;
+    copy_barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    copy_barrier[0].subresourceRange.levelCount = 1;
+    copy_barrier[0].subresourceRange.layerCount = 1;
+    vkCmdPipelineBarrier(aCommandBuffer.mBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, copy_barrier);
 
-      VkBufferImageCopy region = {};
-      region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      region.imageSubresource.layerCount = 1;
-      region.imageExtent.width = aTexture->mWidth;
-      region.imageExtent.height = aTexture->mHeight;
-      region.imageExtent.depth = 1;
-      vkCmdCopyBufferToImage(aCommandBuffer.mBuffer, aTexture->mUploadBuffer, aTexture->mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-    }
+    VkBufferImageCopy region = {};
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.layerCount = 1;
+    region.imageExtent.width = aTexture->mWidth;
+    region.imageExtent.height = aTexture->mHeight;
+    region.imageExtent.depth = 1;
+    vkCmdCopyBufferToImage(aCommandBuffer.mBuffer, aTexture->mUploadBuffer, aTexture->mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
   }
 
   void VulkanRenderer::UploadJob::TextureTransitionTask(VulkanCommandBuffer aCommandBuffer, TextureTransition* aTextureTransition)
@@ -1152,6 +1203,7 @@ namespace SOIS
     use_barrier[0].subresourceRange.layerCount = 1;
     vkCmdPipelineBarrier(aCommandBuffer.mBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, use_barrier);
 
+    printf("Destroy buffer %p, allocation %p\n", aTextureTransition->mUploadBuffer, aTextureTransition->mUploadBufferAllocation);
     vmaDestroyBuffer(mRenderer->mAllocator, aTextureTransition->mUploadBuffer, aTextureTransition->mUploadBufferAllocation);
   }
 
