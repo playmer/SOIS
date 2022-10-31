@@ -457,11 +457,11 @@ namespace SOIS
   // Functions needed to implement various operations once we have data stored.
   struct Type
   {
-    using CopyConstructor = decltype(GenericDoNothing<void>)*;
-    using CopyAssignment = decltype(GenericDoNothing<void>)*;
-    using MoveConstructor = decltype(GenericDoNothing<void>)*;
-    using MoveAssignment = decltype(GenericDoNothing<void>)*;
-    using Destructor = decltype(GenericDoNothing<void>)*;
+    using CopyConstructor = decltype(GenericCopyConstruct<void>)*;
+    using CopyAssignment = decltype(GenericCopyAssignment<void>)*;
+    using MoveConstructor = decltype(GenericMoveConstruct<void>)*;
+    using MoveAssignment = decltype(GenericMoveAssignment<void>)*;
+    using Destructor = decltype(GenericDestructor<void>)*;
 
     template <typename tType>
     static Type MakeType()
@@ -569,7 +569,7 @@ namespace SOIS
       // Destruct any undestructed object.
       if (mType)
       {
-        mType->mDestructor(mMemory);
+        mType->mDestructor((void*)mMemory);
       }
 
       // Capture the destructor of the new type.

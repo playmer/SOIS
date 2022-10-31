@@ -50,7 +50,7 @@ namespace SOIS
   {
   }
 
-  void VulkanQueue::Initialize(vkb::Device aDevice, vkb::QueueType aType, size_t aNumberOfBuffers)
+  void VulkanQueue::Initialize(vkb::Device aDevice, vkb::QueueType aType, size_t aNumberOfBuffers, size_t aQueueIndex)
   {
     mDevice = aDevice;
     mCommandBuffers.resize(aNumberOfBuffers, VK_NULL_HANDLE);
@@ -60,7 +60,7 @@ namespace SOIS
     mUsed.resize(aNumberOfBuffers, false);
     mType = aType;
 
-    auto queue_ret = mDevice.get_queue(mType);
+    auto queue_ret = mDevice.get_queue(mType, aQueueIndex);
     if (!queue_ret) {
       printf("Failed to create Vulkan Queue. Error: %s\n", queue_ret.error().message().c_str());
 
@@ -224,11 +224,10 @@ namespace SOIS
     // If there are textures left to destroy, take care of them:
     for (auto& textureToDestroy : mTexturesToDestroyNextFrame)
     {
-      printf("Destroy image %p, allocation %p\n", textureToDestroy.mImage, textureToDestroy.mImageAllocation);
       vmaDestroyImage(mAllocator, textureToDestroy.mImage, textureToDestroy.mImageAllocation);
     }
-
-    printf("Destroy allocator %p\n", mAllocator);
+    
+    mTexturesToDestroyNextFrame.clear();
     vmaDestroyAllocator(mAllocator);
   }
 
@@ -397,10 +396,15 @@ namespace SOIS
 
     ///////////////////////////////////////
     // Create Queues
-    mTransferQueue.Initialize(mDevice, vkb::QueueType::transfer, 30);
-    mTextureTransitionQueue.Initialize(mDevice, vkb::QueueType::graphics, 30);
     mGraphicsQueue.Initialize(mDevice, vkb::QueueType::graphics, cMinImageCount);
     mPresentQueue.Initialize(mDevice, vkb::QueueType::present, cMinImageCount);
+    mTransferQueue.Initialize(mDevice, vkb::QueueType::transfer, 30);
+
+    auto indexResult = mDevice.get_queue_index(vkb::QueueType::graphics);
+    if (indexResult.has_value() && (1 < mDevice.queue_families[indexResult.value()].queueCount))
+    {
+      mTextureTransitionQueue.Initialize(mDevice, vkb::QueueType::graphics, 30, 1);
+    }
 
     ///////////////////////////////////////
     // Create Swapchain
@@ -483,7 +487,6 @@ namespace SOIS
     allocatorInfo.instance = mInstance;
 
     vmaCreateAllocator(&allocatorInfo, &mAllocator);
-    printf("Create allocator %p\n", mAllocator);
 
     ///////////////////////////////////////
     // Create Render Pass
@@ -762,7 +765,6 @@ namespace SOIS
 
     for (auto& textureToDestroy : mTexturesToDestroyNextFrame)
     {
-      printf("Destroy image %p, allocation %p\n", textureToDestroy.mImage, textureToDestroy.mImageAllocation);
       vmaDestroyImage(mAllocator, textureToDestroy.mImage, textureToDestroy.mImageAllocation);
     }
     mTexturesToDestroyNextFrame.clear();
@@ -815,68 +817,6 @@ namespace SOIS
     info.clearValueCount = 1;
     info.pClearValues = &clearColor;
     vkCmdBeginRenderPass(commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
-  }
-
-  void VulkanRenderer::RecreateSwapchain()
-  {
-    vkb::SwapchainBuilder swapchain_builder{ mDevice };
-    swapchain_builder.set_desired_format(VkSurfaceFormatKHR{ VK_FORMAT_B8G8R8A8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR });
-    auto swap_ret = swapchain_builder.set_old_swapchain(mSwapchain)
-      .build();
-    if (!swap_ret) {
-      // If it failed to create a swapchain, the old swapchain handle is invalid.
-      mSwapchain.swapchain = VK_NULL_HANDLE;
-    }
-    // Even though we recycled the previous swapchain, we need to free its resources.
-    vkb::destroy_swapchain(mSwapchain);
-    // Get the new swapchain and place it in our variable
-    mSwapchain = swap_ret.value();
-
-
-    for (auto framebuffer : mFramebuffers)
-    {
-      vkDestroyFramebuffer(mDevice.device, framebuffer, mDevice.allocation_callbacks);
-    }
-
-    int w, h;
-    SDL_GetWindowSize(mWindow, &w, &h);
-
-    swapchain_images = mSwapchain.get_images().value();
-    swapchain_image_views = mSwapchain.get_image_views().value();
-
-    mFramebuffers.resize(swapchain_image_views.size());
-
-    for (size_t i = 0; i < swapchain_image_views.size(); i++) {
-      VkImageView attachments[] = { swapchain_image_views[i] };
-
-      VkFramebufferCreateInfo framebuffer_info = {};
-      framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-      framebuffer_info.renderPass = mRenderPass;
-      framebuffer_info.attachmentCount = 1;
-      framebuffer_info.pAttachments = attachments;
-      framebuffer_info.width = mSwapchain.extent.width;
-      framebuffer_info.height = mSwapchain.extent.height;
-      framebuffer_info.layers = 1;
-
-      if (vkCreateFramebuffer(mDevice, &framebuffer_info, nullptr, &mFramebuffers[i]) != VK_SUCCESS) {
-        printf("failed to create framebuffer\n");
-        return;
-      }
-    }
-  }
-
-  void VulkanRenderer::ResizeRenderTarget(unsigned int /*aWidth*/, unsigned int /*aHeight*/)
-  {
-    ImGui_ImplVulkan_SetMinImageCount(cMinImageCount);
-    RecreateSwapchain();
-  }
-
-  void VulkanRenderer::ClearRenderTarget(glm::vec4 aClearColor)
-  {
-    mClearColor.float32[0] = aClearColor.x * aClearColor.w;
-    mClearColor.float32[1] = aClearColor.y * aClearColor.w;
-    mClearColor.float32[2] = aClearColor.z * aClearColor.w;
-    mClearColor.float32[3] = aClearColor.w;
   }
 
   void VulkanRenderer::RenderImguiData()
@@ -945,6 +885,68 @@ namespace SOIS
     }
 
     mCurrentFrame = (mCurrentFrame + 1) % cMinImageCount;
+  }
+
+  void VulkanRenderer::RecreateSwapchain()
+  {
+    vkb::SwapchainBuilder swapchain_builder{ mDevice };
+    swapchain_builder.set_desired_format(VkSurfaceFormatKHR{ VK_FORMAT_B8G8R8A8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR });
+    auto swap_ret = swapchain_builder.set_old_swapchain(mSwapchain)
+      .build();
+    if (!swap_ret) {
+      // If it failed to create a swapchain, the old swapchain handle is invalid.
+      mSwapchain.swapchain = VK_NULL_HANDLE;
+    }
+    // Even though we recycled the previous swapchain, we need to free its resources.
+    vkb::destroy_swapchain(mSwapchain);
+    // Get the new swapchain and place it in our variable
+    mSwapchain = swap_ret.value();
+
+
+    for (auto framebuffer : mFramebuffers)
+    {
+      vkDestroyFramebuffer(mDevice.device, framebuffer, mDevice.allocation_callbacks);
+    }
+
+    int w, h;
+    SDL_GetWindowSize(mWindow, &w, &h);
+
+    swapchain_images = mSwapchain.get_images().value();
+    swapchain_image_views = mSwapchain.get_image_views().value();
+
+    mFramebuffers.resize(swapchain_image_views.size());
+
+    for (size_t i = 0; i < swapchain_image_views.size(); i++) {
+      VkImageView attachments[] = { swapchain_image_views[i] };
+
+      VkFramebufferCreateInfo framebuffer_info = {};
+      framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+      framebuffer_info.renderPass = mRenderPass;
+      framebuffer_info.attachmentCount = 1;
+      framebuffer_info.pAttachments = attachments;
+      framebuffer_info.width = mSwapchain.extent.width;
+      framebuffer_info.height = mSwapchain.extent.height;
+      framebuffer_info.layers = 1;
+
+      if (vkCreateFramebuffer(mDevice, &framebuffer_info, nullptr, &mFramebuffers[i]) != VK_SUCCESS) {
+        printf("failed to create framebuffer\n");
+        return;
+      }
+    }
+  }
+
+  void VulkanRenderer::ResizeRenderTarget(unsigned int /*aWidth*/, unsigned int /*aHeight*/)
+  {
+    ImGui_ImplVulkan_SetMinImageCount(cMinImageCount);
+    RecreateSwapchain();
+  }
+
+  void VulkanRenderer::ClearRenderTarget(glm::vec4 aClearColor)
+  {
+    mClearColor.float32[0] = aClearColor.x * aClearColor.w;
+    mClearColor.float32[1] = aClearColor.y * aClearColor.w;
+    mClearColor.float32[2] = aClearColor.z * aClearColor.w;
+    mClearColor.float32[3] = aClearColor.w;
   }
 
   //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1083,8 +1085,6 @@ namespace SOIS
       info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
       err = vmaCreateImage(mAllocator, &info, &allocInfo, &image, &imageAllocation, &imageAllocationInfo);
       check_vk_result(err);
-
-      printf("Create image %p, allocation %p\n", image, imageAllocation);
     }
 
     // Create the Image View:
@@ -1128,8 +1128,6 @@ namespace SOIS
       buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
       err = vmaCreateBuffer(mAllocator, &buffer_info, &allocInfo, &uploadBuffer, &uploadBufferAllocation, nullptr);
       check_vk_result(err);
-
-      printf("Create buffer %p, allocation %p\n", uploadBuffer, uploadBufferAllocation);
     }
 
     // Upload to Buffer:
@@ -1203,7 +1201,6 @@ namespace SOIS
     use_barrier[0].subresourceRange.layerCount = 1;
     vkCmdPipelineBarrier(aCommandBuffer.mBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, use_barrier);
 
-    printf("Destroy buffer %p, allocation %p\n", aTextureTransition->mUploadBuffer, aTextureTransition->mUploadBufferAllocation);
     vmaDestroyBuffer(mRenderer->mAllocator, aTextureTransition->mUploadBuffer, aTextureTransition->mUploadBufferAllocation);
   }
 

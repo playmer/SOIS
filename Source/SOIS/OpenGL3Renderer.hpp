@@ -24,10 +24,31 @@ namespace SOIS
     void RenderImguiData() override;
     void Present() override;
 
+
+    void UploadThread();
+
     std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) override;
 
+    std::future<std::unique_ptr<Texture>> LoadTextureFromDataAsync(unsigned char* data, TextureLayout format, int w, int h, int pitch) override;
+
   private:
+    struct UploadJob
+    {
+      std::vector<unsigned char> mStoredTextureData;
+      TextureLayout format;
+      int mWidth;
+      int mHeight;
+    };
+
+    std::vector<UploadJob> mUploadJobs;
+
+
+    std::mutex mUploadJobsMutex;
+    std::counting_semaphore<std::numeric_limits<std::ptrdiff_t>::max()> mUploadJobsWakeUp;
+
+
     SDL_GLContext mContext;
+    SDL_GLContext mUploadContext;
     SDL_Window* mWindow = nullptr;
   };
 }

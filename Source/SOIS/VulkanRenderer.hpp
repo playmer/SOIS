@@ -50,7 +50,7 @@ namespace SOIS
   public:
     VulkanQueue();
 
-    void Initialize(vkb::Device aDevice, vkb::QueueType aType, size_t aNumberOfBuffers);
+    void Initialize(vkb::Device aDevice, vkb::QueueType aType, size_t aNumberOfBuffers, size_t aQueueIndex = 0);
 
 
     VulkanCommandBuffer WaitOnNextCommandList();
@@ -160,7 +160,7 @@ namespace SOIS
     std::vector<TextureDestroyer> mTexturesToDestroyNextFrame;
 
 
-    std::future<std::unique_ptr<Texture>> LoadTextureFromDataAsync(unsigned char* data, TextureLayout format, int w, int h, int pitch);
+    std::future<std::unique_ptr<Texture>> LoadTextureFromDataAsync(unsigned char* data, TextureLayout format, int w, int h, int pitch) override;
     void UploadThread();
     struct UploadJob
     {

@@ -1,4 +1,7 @@
 
+
+#include <vector>
+
 #include <glbinding/gl/gl.h>
 #include <glbinding/glbinding.h>
 
@@ -94,6 +97,7 @@ namespace SOIS
 
   OpenGL3Renderer::OpenGL3Renderer()
     : Renderer{}
+    , mUploadJobsWakeUp{ 0 }
   {
     // Decide GL+GLSL versions
 #if __APPLE__
@@ -126,9 +130,11 @@ namespace SOIS
 
   void OpenGL3Renderer::Initialize(SDL_Window* aWindow, char8_t const* /*aPreferredGpu*/)
   {
+    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
     mWindow = aWindow;
 
     mContext = SDL_GL_CreateContext(mWindow);
+    mUploadContext = SDL_GL_CreateContext(mWindow);
     SDL_GL_MakeCurrent(mWindow, mContext);
     SDL_GL_SetSwapInterval(1); // Enable vsync
 
@@ -145,12 +151,97 @@ namespace SOIS
 
     ImGui_ImplSDL2_InitForOpenGL(mWindow, mContext);
     ImGui_ImplOpenGL3_Init(gGlslVersion);
+
+    mUploadThread = std::thread([this]()
+      {
+        UploadThread();
+      });
   }
+
 
 
   OpenGL3Renderer::~OpenGL3Renderer()
   {
+    mShouldJoin = true;
+    mUploadJobsWakeUp.release();
+    mUploadThread.join();
+
     ImGui_ImplOpenGL3_Shutdown();
+  }
+
+
+  void OpenGL3Renderer::UploadThread()
+  {
+    SDL_GL_MakeCurrent(mWindow, mUploadContext);
+    std::vector<UploadJob> uploads;
+    //std::vector<UploadJob> transitions;
+
+    while (!mShouldJoin)
+    {
+      //// Aquire Job
+      mUploadJobsMutex.lock();
+      std::swap(uploads, mUploadJobs);
+      mUploadJobsMutex.unlock();
+      /////////////////////////////////////////////
+      // Uploads accrued
+      //auto transferCommandList = mTransferQueue.WaitOnNextCommandList();
+      //
+      //transferCommandList.Begin();
+      //for (auto& job : uploads)
+      //{
+      //  auto result = job(transferCommandList);
+      //
+      //  if (result.has_value())
+      //  {
+      //    transitions.emplace_back(std::move(result.value()));
+      //  }
+      //}
+      //
+      //transferCommandList.End();
+      //mTransferQueue.Submit(transferCommandList);
+      //
+      //if (VK_NULL_HANDLE != transferCommandList.mFence)
+      //{
+      //  vkWaitForFences(mDevice.device, 1, &transferCommandList.mFence, true, UINT64_MAX);
+      //}
+      //
+      //// Fulfill promises
+      //for (auto& job : uploads)
+      //{
+      //  job.FulfillPromise();
+      //}
+      //
+      ///////////////////////////////////////////////
+      //// Transitions accrued
+      //auto transitionCommandList = mTextureTransitionQueue.WaitOnNextCommandList();
+      //
+      //transitionCommandList.Begin();
+      //
+      //for (auto& textureTransfer : transitions)
+      //{
+      //  textureTransfer(transitionCommandList);
+      //}
+      //
+      //transitionCommandList.End();
+      //mTextureTransitionQueue.Submit(transitionCommandList);
+      //
+      //if (VK_NULL_HANDLE != transitionCommandList.mFence)
+      //{
+      //  vkWaitForFences(mDevice.device, 1, &transitionCommandList.mFence, true, UINT64_MAX);
+      //}
+      //
+      //// Fulfill promises
+      //for (auto& job : transitions)
+      //{
+      //  job.FulfillPromise();
+      //}
+      //
+      ///////////////////////////////////////////////
+      //// End
+      uploads.clear();
+
+      mUploadJobsWakeUp.acquire();
+    }
   }
 
   void OpenGL3Renderer::NewFrame()
@@ -248,5 +339,39 @@ namespace SOIS
     auto texture = std::make_unique<OpenGL3Texture>(image_texture, w, h);
 
     return std::unique_ptr<Texture>(texture.release());
+  }
+
+
+  //
+  
+
+  std::future<std::unique_ptr<Texture>> OpenGL3Renderer::LoadTextureFromDataAsync(unsigned char* data, TextureLayout format, int w, int h, int pitch)
+  {
+    std::vector<unsigned char> storedData;
+    storedData.resize(h * pitch);
+    memcpy(storedData.data(), data, storedData.size());
+    
+    
+
+    //// Create a OpenGL texture identifier
+    //gl::GLuint image_texture;
+    //gl::glGenTextures(1, &image_texture);
+    //gl::glBindTexture(gl::GL_TEXTURE_2D, image_texture);
+    //
+    //// Setup filtering parameters for display
+    //gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, gl::GL_LINEAR);
+    //gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, gl::GL_LINEAR);
+    //gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, gl::GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
+    //gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, gl::GL_CLAMP_TO_EDGE); // Same
+    //
+    //// Upload pixels into texture
+    //#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
+    //    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    //#endif
+    //gl::glTexImage2D(gl::GL_TEXTURE_2D, 0, FromSOIS(format), w, h, 0, FromSOIS(format), gl::GL_UNSIGNED_BYTE, data);
+    //
+    //auto texture = std::make_unique<OpenGL3Texture>(image_texture, w, h);
+    //
+    //return std::unique_ptr<Texture>(texture.release());
   }
 }

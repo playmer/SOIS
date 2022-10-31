@@ -9,9 +9,42 @@
 
 #include "DX12Renderer.hpp"
 
+using namespace Microsoft::WRL;
+
 namespace SOIS
 {
-  using namespace Microsoft::WRL;
+  ///////////////////////////////////////////////////////////////////
+  // DX12 Texture
+  class DX12Texture : public Texture
+  {
+  public:
+    DX12Texture(
+      Microsoft::WRL::ComPtr<ID3D12Resource> aTexture,
+      Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> aSrvHeap,
+      D3D12_GPU_DESCRIPTOR_HANDLE aGpuHandle,
+      int aWidth,
+      int aHeight)
+      : Texture{ aWidth, aHeight }
+      , mTexture{ aTexture }
+      , mSrvHeap{ aSrvHeap }
+      , mGpuHandle{ aGpuHandle }
+    {
+
+    }
+
+    ~DX12Texture() override
+    {
+    }
+
+    virtual ImTextureID GetTextureId()
+    {
+      return ImTextureID{ (void*)mGpuHandle.ptr, mSrvHeap.Get()};
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> mTexture;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mSrvHeap;
+    D3D12_GPU_DESCRIPTOR_HANDLE mGpuHandle;
+  };
 
   // From DXSampleHelper.h 
   // Source: https://github.com/Microsoft/DirectX-Graphics-Samples
@@ -23,8 +56,8 @@ namespace SOIS
     }
   }
 
-  DX12Renderer* gRenderer = nullptr;
-
+  ///////////////////////////////////////////////////////////////////
+  // DX12GPUAllocator
   struct DX12GPUAllocatorData
   {
     DX12GPUAllocatorData(DX12Renderer* aRenderer)
@@ -616,10 +649,184 @@ namespace SOIS
     }
   }
 
+
+  ////////////////////////////////////////////////////////////////////////////////////////////
+  // Upload Thread
+
+  DX12Renderer::UploadJob::UploadJob(DX12Renderer* aRenderer, Texture aTexture)
+    : mRenderer{ aRenderer }
+    , mVariant{ std::move(aTexture) }
+  {
+
+  }
+  DX12Renderer::UploadJob::UploadJob(DX12Renderer* aRenderer, TextureTransition aTextureTransition)
+    : mRenderer{ aRenderer }
+    , mVariant{ std::move(aTextureTransition) }
+  {
+  }
+
+  DX12Renderer::UploadJob::UploadJob(DX12Renderer* aRenderer, Buffer aBuffer)
+    : mRenderer{ aRenderer }
+    , mVariant{ std::move(aBuffer) }
+  {
+  }
+
+  std::optional<DX12Renderer::UploadJob> DX12Renderer::UploadJob::operator()(DX12CommandBuffer aCommandBuffer)
+  {
+    return std::visit([this, aCommandBuffer](auto&& arg) -> std::optional<DX12Renderer::UploadJob> {
+      using T = std::decay_t<decltype(arg)>;
+      if constexpr (std::is_same_v<T, Texture>)
+      {
+        auto [srvHeap, gpuHandle] = TextureUpload(aCommandBuffer, &arg);
+
+        return UploadJob(mRenderer,
+          TextureTransition{
+            std::move(arg.mTexturePromise),
+            std::move(arg.mTexture),
+            std::move(arg.mUploadBuffer),
+            std::move(srvHeap),
+            gpuHandle,
+            arg.mWidth,
+            arg.mHeight,
+            arg.mUploadPitch
+          });
+      }
+      else if constexpr (std::is_same_v<T, TextureTransition>)
+        TextureTransitionTask(aCommandBuffer, &arg);
+      else if constexpr (std::is_same_v<T, Buffer>)
+        BufferUpload(aCommandBuffer, &arg);
+      else
+        static_assert(always_false_v<T>, "non-exhaustive visitor!");
+
+      return std::nullopt;
+      }, mVariant);
+  }
+
+  void DX12Renderer::UploadJob::FulfillPromise()
+  {
+    std::visit([this](auto&& arg) {
+      using T = std::decay_t<decltype(arg)>;
+      if constexpr (std::is_same_v<T, Texture>)
+      {
+        // Textures can't fulfill their promise, the TextureTransition has to do it.
+      }
+      else if constexpr (std::is_same_v<T, TextureTransition>)
+      {
+        arg.mTexturePromise.set_value(std::make_unique<DX12Texture>(
+          std::move(arg.mTexture), 
+          std::move(arg.mSrvHeap),
+          arg.mGpuHandle,
+          static_cast<int>(arg.mWidth), 
+          static_cast<int>(arg.mHeight)));
+      }
+      else if constexpr (std::is_same_v<T, Buffer>)
+      {
+      }
+      else
+        static_assert(always_false_v<T>, "non-exhaustive visitor!");
+      }, mVariant);
+  }
+
+  void DX12Renderer::UploadThread()
+  {
+    std::vector<UploadJob> uploads;
+    std::vector<UploadJob> transitions;
+
+    while (!mShouldJoin)
+    {
+      // Aquire Job
+      mUploadJobsMutex.lock();
+      std::swap(uploads, mUploadJobs);
+      mUploadJobsMutex.unlock();
+
+      /////////////////////////////////////////////
+      // Uploads accrued
+      auto transferCommandList = mTransferQueue.WaitOnNextCommandList();
+
+      //transferCommandList.Begin();
+      for (auto& job : uploads)
+      {
+        auto result = job(transferCommandList);
+
+        if (result.has_value())
+        {
+          transitions.emplace_back(std::move(result.value()));
+        }
+      }
+
+      //transferCommandList.End();
+      //mTransferQueue.Submit(transferCommandList);
+      transferCommandList.ExecuteOnQueue();
+
+      //if (VK_NULL_HANDLE != transferCommandList.mFence)
+      //{
+      //  vkWaitForFences(mDevice.device, 1, &transferCommandList.mFence, true, UINT64_MAX);
+      //}
+
+      // Fulfill promises
+      for (auto& job : uploads)
+      {
+        job.FulfillPromise();
+      }
+
+      /////////////////////////////////////////////
+      // Transitions accrued
+      auto transitionCommandList = mTextureTransitionQueue.WaitOnNextCommandList();
+
+      //transitionCommandList.Begin();
+
+      for (auto& textureTransfer : transitions)
+      {
+        textureTransfer(transitionCommandList);
+      }
+
+      transitionCommandList.ExecuteOnQueue();
+      //transitionCommandList.End();
+      //mTextureTransitionQueue.Submit(transitionCommandList);
+
+      //if (VK_NULL_HANDLE != transitionCommandList.mFence)
+      //{
+      //  vkWaitForFences(mDevice.device, 1, &transitionCommandList.mFence, true, UINT64_MAX);
+      //}
+
+      transitionCommandList.Wait();
+
+      // Fulfill promises
+      for (auto& job : transitions)
+      {
+        job.FulfillPromise();
+      }
+
+      /////////////////////////////////////////////
+      // End
+      transitions.clear();
+      uploads.clear();
+
+      mUploadJobsWakeUp.acquire();
+    }
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   //////////////////////////////////////////////////////////////////////////////////////////////
   // Renderer
   DX12Renderer::DX12Renderer()
     : mUBOUpdates{ this }
+    , mUploadJobsWakeUp{ 0 }
   {
   }
 
@@ -627,7 +834,6 @@ namespace SOIS
   {
     mWindow = aWindow;
     EnableDebugLayer();
-    gRenderer = this;
 
     // Windows 10 Creators update adds Per Monitor V2 DPI awareness context.
     // Using this awareness context allows the client area of the window 
@@ -688,11 +894,22 @@ namespace SOIS
     {
       mCommandAllocators[i] = CreateCommandAllocator(mDevice, D3D12_COMMAND_LIST_TYPE_DIRECT);
     }
+
+
+
+    mUploadThread = std::thread([this]()
+      {
+        UploadThread();
+      });
   }
 
 
   DX12Renderer::~DX12Renderer()
   {
+    mShouldJoin = true;
+    mUploadJobsWakeUp.release();
+    mUploadThread.join();
+
     // Make sure the command queue has finished all commands before closing.
     mTransferQueue.Flush();
     mTextureTransitionQueue.Flush();
@@ -943,37 +1160,6 @@ namespace SOIS
 
     return static_unique_pointer_cast<GPUBufferBase>(std::move(base));
   }
-
-  class DX12Texture : public Texture
-  {
-  public:
-    DX12Texture(
-      Microsoft::WRL::ComPtr<ID3D12Resource> aTexture, 
-      ID3D12DescriptorHeap* aSrvHeap, 
-      D3D12_GPU_DESCRIPTOR_HANDLE aGpuHandle,
-      int aWidth, 
-      int aHeight)
-      : Texture{ aWidth, aHeight }
-      , mTexture{ aTexture }
-      , mSrvHeap{ aSrvHeap }
-      , mGpuHandle{ aGpuHandle }
-    {
-  
-    }
-  
-    ~DX12Texture() override
-    {
-    }
-  
-    virtual ImTextureID GetTextureId()
-    {
-      return ImTextureID{ (void*)mGpuHandle.ptr, mSrvHeap };
-    }
-  
-    Microsoft::WRL::ComPtr<ID3D12Resource> mTexture;
-    ID3D12DescriptorHeap* mSrvHeap;
-    D3D12_GPU_DESCRIPTOR_HANDLE mGpuHandle;
-  };
   
   static DXGI_FORMAT FromSOIS(TextureLayout aLayout)
   {
@@ -993,51 +1179,51 @@ namespace SOIS
 
   void DX12Renderer::Upload()
   {
-    auto commandBuffer = mTransferQueue.WaitOnNextCommandList();
-    mUBOUpdates.Update(commandBuffer.Buffer());
-    commandBuffer.ExecuteOnQueue();
-    commandBuffer.Wait();
-    TransitionTextures();
+    //auto commandBuffer = mTransferQueue.WaitOnNextCommandList();
+    //mUBOUpdates.Update(commandBuffer.Buffer());
+    //commandBuffer.ExecuteOnQueue();
+    //commandBuffer.Wait();
+    //TransitionTextures();
   }
 
   void DX12Renderer::TransitionTextures()
   {
-    if (mTexturesCreatedThisFrame.empty())
-      return;
-
-    auto commandBuffer = mTextureTransitionQueue.WaitOnNextCommandList();
-
-    for (auto& textureTransfer : mTexturesCreatedThisFrame)
-    {
-      D3D12_TEXTURE_COPY_LOCATION srcLocation = {};
-      srcLocation.pResource = textureTransfer.mUploadBuffer.Get();
-      srcLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-      srcLocation.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-      srcLocation.PlacedFootprint.Footprint.Width = textureTransfer.mWidth;
-      srcLocation.PlacedFootprint.Footprint.Height = textureTransfer.mHeight;
-      srcLocation.PlacedFootprint.Footprint.Depth = 1;
-      srcLocation.PlacedFootprint.Footprint.RowPitch = textureTransfer.mUploadPitch;
-
-      D3D12_TEXTURE_COPY_LOCATION dstLocation = {};
-      dstLocation.pResource = textureTransfer.mTexture.Get();
-      dstLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-      dstLocation.SubresourceIndex = 0;
-
-      D3D12_RESOURCE_BARRIER barrier = {};
-      barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-      barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-      barrier.Transition.pResource = textureTransfer.mTexture.Get();
-      barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-      barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-      barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-
-      commandBuffer->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, NULL);
-      commandBuffer->ResourceBarrier(1, &barrier);
-    }
-
-    commandBuffer.ExecuteOnQueue();
-
-    mTexturesCreatedThisFrame.clear();
+    //if (mTexturesCreatedThisFrame.empty())
+    //  return;
+    //
+    //auto commandBuffer = mTextureTransitionQueue.WaitOnNextCommandList();
+    //
+    //for (auto& textureTransfer : mTexturesCreatedThisFrame)
+    //{
+    //  D3D12_TEXTURE_COPY_LOCATION srcLocation = {};
+    //  srcLocation.pResource = textureTransfer.mUploadBuffer.Get();
+    //  srcLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    //  srcLocation.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    //  srcLocation.PlacedFootprint.Footprint.Width = textureTransfer.mWidth;
+    //  srcLocation.PlacedFootprint.Footprint.Height = textureTransfer.mHeight;
+    //  srcLocation.PlacedFootprint.Footprint.Depth = 1;
+    //  srcLocation.PlacedFootprint.Footprint.RowPitch = textureTransfer.mUploadPitch;
+    //
+    //  D3D12_TEXTURE_COPY_LOCATION dstLocation = {};
+    //  dstLocation.pResource = textureTransfer.mTexture.Get();
+    //  dstLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    //  dstLocation.SubresourceIndex = 0;
+    //
+    //  D3D12_RESOURCE_BARRIER barrier = {};
+    //  barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    //  barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    //  barrier.Transition.pResource = textureTransfer.mTexture.Get();
+    //  barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    //  barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    //  barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    //
+    //  commandBuffer->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, NULL);
+    //  commandBuffer->ResourceBarrier(1, &barrier);
+    //}
+    //
+    //commandBuffer.ExecuteOnQueue();
+    //
+    //mTexturesCreatedThisFrame.clear();
   }
 
   std::unique_ptr<Texture> DX12Renderer::LoadTextureFromData(unsigned char* aData, TextureLayout aFormat, int aWidth, int aHeight, int pitch)
@@ -1132,5 +1318,163 @@ namespace SOIS
     mTexturesCreatedThisFrame.emplace_back(aWidth, aHeight, uploadPitch, pTexture, uploadBuffer);
 
     return std::make_unique<DX12Texture>(pTexture, srvDescHeap, my_texture_srv_gpu_handle, aWidth, aHeight);
+  }
+
+
+  std::future<std::unique_ptr<Texture>> DX12Renderer::LoadTextureFromDataAsync(unsigned char* aData, TextureLayout aFormat, int aWidth, int aHeight, int aPitch)
+  {
+    // Create texture resource
+    D3D12_HEAP_PROPERTIES props;
+    memset(&props, 0, sizeof(D3D12_HEAP_PROPERTIES));
+    props.Type = D3D12_HEAP_TYPE_DEFAULT;
+    props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+    D3D12_RESOURCE_DESC desc;
+    ZeroMemory(&desc, sizeof(desc));
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Alignment = 0;
+    desc.Width = aWidth;
+    desc.Height = aHeight;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> pTexture = NULL;
+    mDevice->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc,
+      D3D12_RESOURCE_STATE_COPY_DEST, NULL, IID_PPV_ARGS(&pTexture));
+
+    // Create a temporary upload resource to move the data in
+    UINT uploadPitch = (aWidth * 4 + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) & ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
+    UINT uploadSize = aHeight * uploadPitch;
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Alignment = 0;
+    desc.Width = uploadSize;
+    desc.Height = 1;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.Format = DXGI_FORMAT_UNKNOWN;
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    props.Type = D3D12_HEAP_TYPE_UPLOAD;
+    props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> uploadBuffer = NULL;
+    HRESULT hr = mDevice->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc,
+      D3D12_RESOURCE_STATE_GENERIC_READ, NULL, IID_PPV_ARGS(&uploadBuffer));
+    IM_ASSERT(SUCCEEDED(hr));
+
+    // Write pixels into the upload resource
+    void* mapped = NULL;
+    D3D12_RANGE range = { 0, uploadSize };
+    hr = uploadBuffer->Map(0, &range, &mapped);
+    IM_ASSERT(SUCCEEDED(hr));
+    for (int y = 0; y < aHeight; y++)
+      memcpy((void*)((uintptr_t)mapped + y * uploadPitch), aData + y * aWidth * 4, aWidth * 4);
+    uploadBuffer->Unmap(0, &range);
+
+
+    std::promise<std::unique_ptr<SOIS::Texture>> texturePromise;
+    std::future<std::unique_ptr<SOIS::Texture>> textureFuture = texturePromise.get_future();
+
+    {
+      std::unique_lock lock{ mUploadJobsMutex };
+      mUploadJobs.emplace_back(
+        this,
+        UploadJob::Texture{
+          std::move(texturePromise),
+          std::move(pTexture),
+          std::move(uploadBuffer),
+          desc,
+          static_cast<size_t>(aWidth),
+          static_cast<size_t>(aHeight),
+          static_cast<size_t>(uploadPitch)
+        });
+    }
+    mUploadJobsWakeUp.release(1);
+
+    return textureFuture;
+  }
+
+
+  DX12Renderer::UploadJob::UploadValues DX12Renderer::UploadJob::TextureUpload(DX12CommandBuffer aCommandBuffer, Texture* aTexture)
+  {
+    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDescription = {
+      D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+      1,
+      D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+      0
+    };
+    ID3D12DescriptorHeap* srvDescHeap = nullptr;
+    if (mRenderer->mDevice.Get()->CreateDescriptorHeap(&srvHeapDescription, IID_PPV_ARGS(&srvDescHeap)) != S_OK)
+    {
+      printf("Couldn't create a DescriptorHeap for a texture\n");
+      return {nullptr, NULL};
+    }
+    
+    UINT handle_increment = mRenderer->mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    int descriptor_index = 0; // The descriptor table index to use (not normally a hard-coded constant, but in this case we'll assume we have slot 1 reserved for us)
+    D3D12_CPU_DESCRIPTOR_HANDLE my_texture_srv_cpu_handle = srvDescHeap->GetCPUDescriptorHandleForHeapStart();
+    my_texture_srv_cpu_handle.ptr += (handle_increment * descriptor_index);
+    D3D12_GPU_DESCRIPTOR_HANDLE my_texture_srv_gpu_handle = srvDescHeap->GetGPUDescriptorHandleForHeapStart();
+    my_texture_srv_gpu_handle.ptr += (handle_increment * descriptor_index);
+    
+    // Create a shader resource view for the texture
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+    ZeroMemory(&srvDesc, sizeof(srvDesc));
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = aTexture->mDescription.MipLevels;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    
+    mRenderer->mDevice->CreateShaderResourceView(aTexture->mTexture.Get(), &srvDesc, my_texture_srv_cpu_handle);
+
+    return { srvDescHeap, my_texture_srv_gpu_handle };
+    
+    //mTexturesCreatedThisFrame.emplace_back(aWidth, aHeight, uploadPitch, pTexture, uploadBuffer);
+    //
+    //return std::make_unique<DX12Texture>(pTexture, srvDescHeap, my_texture_srv_gpu_handle, aWidth, aHeight);
+  }
+
+  void DX12Renderer::UploadJob::BufferUpload(DX12CommandBuffer aCommandBuffer, Buffer* aBuffer)
+  {
+
+  }
+
+  void DX12Renderer::UploadJob::TextureTransitionTask(DX12CommandBuffer aCommandBuffer, TextureTransition* aTextureTransition)
+  {
+    D3D12_TEXTURE_COPY_LOCATION srcLocation = {};
+    srcLocation.pResource = aTextureTransition->mUploadBuffer.Get();
+    srcLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    srcLocation.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srcLocation.PlacedFootprint.Footprint.Width = static_cast<UINT>(aTextureTransition->mWidth);
+    srcLocation.PlacedFootprint.Footprint.Height = static_cast<UINT>(aTextureTransition->mHeight);
+    srcLocation.PlacedFootprint.Footprint.Depth = 1;
+    srcLocation.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(aTextureTransition->mUploadPitch);
+
+    D3D12_TEXTURE_COPY_LOCATION dstLocation = {};
+    dstLocation.pResource = aTextureTransition->mTexture.Get();
+    dstLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    dstLocation.SubresourceIndex = 0;
+
+    D3D12_RESOURCE_BARRIER barrier = {};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier.Transition.pResource = aTextureTransition->mTexture.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    
+    aCommandBuffer->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, NULL);
+    aCommandBuffer->ResourceBarrier(1, &barrier);
   }
 }

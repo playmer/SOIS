@@ -139,71 +139,8 @@ namespace SOIS
 
     void Flush();
 
-    //uint32_t GetQueueFamily();
-
-
-    //Dx12Queue(Microsoft::WRL::ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type);
-    //virtual ~Dx12Queue();
-    //
-    //// Get an available command list from the command queue.
-    //Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetCommandList();
-    //
-    //// Execute a command list.
-    //// Returns the fence value to wait for for this command list.
-    //uint64_t ExecuteCommandList(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> commandList);
-    //
-    //uint64_t Signal();
-    //bool IsFenceComplete(uint64_t fenceValue);
-    //void WaitForFenceValue(uint64_t fenceValue);
-    //void Flush();
-    //
-    //auto operator->() const
-    //{
-    //  return mQueue.Get();
-    //}
-    //
-    //auto& operator&()
-    //{
-    //  return mQueue;
-    //}
-    //
-    //auto& operator&() const
-    //{
-    //  return mQueue;
-    //}
-    //
-    //Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetD3D12CommandQueue() const
-    //{
-    //  return mQueue;
-    //}
-
-  protected:
-    //Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CreateCommandAllocator();
-    //Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CreateCommandList(Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator);
-
   private:
-    //// Keep track of command allocators that are "in-flight"
-    //struct CommandAllocatorEntry
-    //{
-    //  uint64_t fenceValue;
-    //  Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator;
-    //};
-    //
-    //using CommandAllocatorQueue = std::queue<CommandAllocatorEntry>;
-    //using CommandListQueue = std::queue<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> >;
-    //
-    //D3D12_COMMAND_LIST_TYPE                     mCommandListType;
-    //Microsoft::WRL::ComPtr<ID3D12Device2>       mDevice;
-    //Microsoft::WRL::ComPtr<ID3D12CommandQueue>  mQueue;
-    //Microsoft::WRL::ComPtr<ID3D12Fence>         mFence;
-    //HANDLE                                      mFenceEvent;
-    //uint64_t                                    mFenceValue;
-    //
-    //CommandAllocatorQueue                       mCommandAllocatorQueue;
-    //CommandListQueue                            mCommandListQueue;
     friend DX12CommandBuffer;
-
-
 
     Microsoft::WRL::ComPtr<ID3D12Device2> mDevice;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> mQueue;
@@ -213,8 +150,6 @@ namespace SOIS
     std::vector<HANDLE> mFenceEvents;
     std::vector<uint64_t> mFenceValues;
 
-    //std::vector<VkSemaphore> mAvailableSemaphores;
-    //std::vector<VkSemaphore> mFinishedSemaphore;
     std::vector<bool> mUsed; // lmao vector bool
     size_t mCurrentBuffer = 0;
     D3D12_COMMAND_LIST_TYPE mType;
@@ -253,37 +188,104 @@ namespace SOIS
 //    void CopyTextureSubresource(const std::shared_ptr<DX12Texture>& texture, uint32_t firstSubresource, uint32_t numSubresources, D3D12_SUBRESOURCE_DATA* subresourceData);
 
     std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) override;
+    std::future<std::unique_ptr<Texture>> LoadTextureFromDataAsync(unsigned char* data, TextureLayout format, int w, int h, int pitch) override;
+    void UploadThread();
+    struct UploadJob
+    {
+      struct Texture
+      {
+        std::promise<std::unique_ptr<SOIS::Texture>> mTexturePromise;
+        Microsoft::WRL::ComPtr<ID3D12Resource> mTexture;
+        Microsoft::WRL::ComPtr<ID3D12Resource> mUploadBuffer;
+        D3D12_RESOURCE_DESC mDescription;
+        size_t mWidth;
+        size_t mHeight;
+        size_t mUploadPitch;
+      };
+
+      struct TextureTransition
+      {
+        std::promise<std::unique_ptr<SOIS::Texture>> mTexturePromise;
+        Microsoft::WRL::ComPtr<ID3D12Resource> mTexture;
+        Microsoft::WRL::ComPtr<ID3D12Resource> mUploadBuffer;
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mSrvHeap;
+        D3D12_GPU_DESCRIPTOR_HANDLE mGpuHandle;
+        size_t mWidth;
+        size_t mHeight;
+        size_t mUploadPitch;
+      };
+
+      struct Buffer
+      {
+        DX12Renderer* mRenderer;
+        Microsoft::WRL::ComPtr<ID3D12Resource> mBuffer;
+        D3D12_RESOURCE_STATES mState;
+      };
+
+      UploadJob(DX12Renderer* aRenderer, Texture aTexture);
+      UploadJob(DX12Renderer* aRenderer, TextureTransition aTextureTransition);
+      UploadJob(DX12Renderer* aRenderer, Buffer);
+
+      UploadJob(UploadJob&&) = default;
+      UploadJob(UploadJob&) = default;
+
+      std::optional<UploadJob> operator()(DX12CommandBuffer aCommandBuffer);
+      void FulfillPromise();
+
+      struct UploadValues
+      {
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mSrvHeap;
+        D3D12_GPU_DESCRIPTOR_HANDLE mGpuHandle;
+      };
+
+      UploadValues TextureUpload(DX12CommandBuffer aCommandBuffer, Texture* aTexture);
+      void BufferUpload(DX12CommandBuffer aCommandBuffer, Buffer* aBuffer);
+      void TextureTransitionTask(DX12CommandBuffer aCommandBuffer, TextureTransition * aTextureTransition);
+
+      DX12Renderer* mRenderer;
+      std::variant<Texture, TextureTransition, Buffer> mVariant;
+    };
+    std::vector<UploadJob> mUploadJobs;
+    std::mutex mUploadJobsMutex;
+    std::counting_semaphore<std::numeric_limits<std::ptrdiff_t>::max()> mUploadJobsWakeUp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     GPUAllocator* MakeAllocator(std::string const& aAllocatorType, size_t aBlockSize) override;
 
-    //Microsoft::WRL::ComPtr<ID3D12Device> mD3DDevice = nullptr;
-    //Microsoft::WRL::ComPtr<ID3D12DeviceContext> mD3DDeviceContext = nullptr;
-    //Microsoft::WRL::ComPtr<IDXGISwapChain3> mSwapChain = nullptr;
-    //ID3D12RenderTargetView* mMainRenderTargetView = nullptr;
     SDL_Window* mWindow = nullptr;
 
-
-    //static constexpr int cNumBackBuffers = 3;
     static constexpr int cNumFramesInFlight = 3;
-
-    //std::array<ID3D12Resource*, cNumBackBuffers> mMainRenderTargetResource = {};
-    //std::array<D3D12_CPU_DESCRIPTOR_HANDLE, cNumBackBuffers> mMainRenderTargetDescriptor = {};
-    //std::array<FrameContext, cNumFramesInFlight> mFrameContexts = {};
-    //
-    //ID3D12DescriptorHeap* mRtvDescHeap = nullptr;
-    //ID3D12DescriptorHeap* mSrvDescHeap = nullptr;
-    //ID3D12CommandQueue* mCommandQueue = nullptr;
-    //ID3D12GraphicsCommandList* mCommandList = nullptr;
-    //FrameContext* mCurrentFrameContext = nullptr;
-    //
-    //
-    //ID3D12Fence* mFence = nullptr;
-    //HANDLE mFenceEvent = nullptr;
-    //UINT64 mFenceLastSignaledValue = 0;
-    //HANDLE mSwapChainWaitableObject = nullptr;
-    //
-    //UINT mFrameIndex = 0;
-    //int mBackBufferIdx = 0;
-
 
     void TransitionTextures();
     
@@ -345,20 +347,13 @@ namespace SOIS
     Dx12Queue mTextureTransitionQueue;
     Dx12Queue mGraphicsQueue;
     Dx12Queue mComputeQueue;
-    //Dx12Queue mPresentQueue;
 
 
 
     Microsoft::WRL::ComPtr<IDXGISwapChain4> mSwapChain;
     Microsoft::WRL::ComPtr<ID3D12Resource> mBackBuffers[cNumFramesInFlight];
-    //Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> mCommandList;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> mCommandAllocators[cNumFramesInFlight];
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mRTVDescriptorHeap;
-
-    //Microsoft::WRL::ComPtr<ID3D12Resource> mRenderingBackBuffer;
-    //Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> mRenderingCommandBuffer;
-    //uint64_t mUploadCommandBufferFenceValue;
-    //std::array<uint64_t, cNumFramesInFlight> mFrameFenceValues = {};
 
     UINT mRTVDescriptorSize;
     UINT mCurrentBackBufferIndex;
@@ -372,7 +367,6 @@ namespace SOIS
 
 
     // imgui
-    //Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mSrvDescHeap = nullptr;
     ID3D12DescriptorHeap* mSrvDescHeap = nullptr;
     std::vector<ID3D12DescriptorHeap*> mHeaps;
   };
