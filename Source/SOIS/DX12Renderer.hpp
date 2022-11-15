@@ -246,6 +246,24 @@ namespace SOIS
     };
     std::vector<UploadJob> mUploadJobs;
 
+    struct CommandVisitor
+    {
+      CommandVisitor(DX12Renderer* aRenderer)
+        : mCommandList{ aRenderer->mGraphicsQueue.GetCurrentCommandList() }
+        , mRenderer{ aRenderer }
+      {
+
+      }
+
+      void operator()(RenderStateCommand& aJob);
+      void operator()(BindVertexBufferCommand& aJob);
+      void operator()(BindIndexBufferCommand& aJob);
+      void operator()(BindPipelineCommand& aJob);
+      void operator()(DrawCommand& aJob);
+
+      DX12CommandBuffer mCommandList;
+      DX12Renderer* mRenderer;
+    };
 
     //GPUAllocator* MakeAllocator(std::string const& aAllocatorType, size_t aBlockSize) override;
 

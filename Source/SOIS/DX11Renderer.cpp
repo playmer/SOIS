@@ -41,7 +41,7 @@ namespace SOIS
 
   struct DX11GPUBufferData
   {
-    Microsoft::WRL::ComPtr<ID3D11Buffer> mVertexBuffer = nullptr;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> mBuffer = nullptr;
   };
 
   class DX11Texture : public Texture
@@ -365,16 +365,25 @@ namespace SOIS
   }
   void DX11Renderer::CommandVisitor::operator()(BindVertexBufferCommand & aJob)
   {
+    std::vector<ID3D11Buffer*> buffers;
+    buffers.resize(aJob.mGPUBuffers.size());
+
+    for (auto& buffer : aJob.mGPUBuffers)
+    {
+      buffers.push_back(GetDataFromGPUObject(buffer).Get<DX11GPUBufferData>()->mBuffer.Get());
+    }
+
     mRenderer->mD3DDeviceContext->IASetVertexBuffers(
       0,
-      1,
-      mVertexBuffer.GetAddressOf(),
+      buffers.size(),
+      buffers.data(),
       &cVertexStride,
       &cVertexOffset);
   }
   void DX11Renderer::CommandVisitor::operator()(BindIndexBufferCommand & aJob)
   {
-    mRenderer->mD3DDeviceContext->IASetIndexBuffer();
+    auto bufferData = GetDataFromGPUObject(aJob.mGPUBuffer).Get<DX11GPUBufferData>();
+    mRenderer->mD3DDeviceContext->IASetIndexBuffer(bufferData->mBuffer.Get(), DXGI_FORMAT_R32_UINT,0);
   }
   void DX11Renderer::CommandVisitor::operator()(BindPipelineCommand & aJob)
   {
@@ -387,7 +396,7 @@ namespace SOIS
   }
   void DX11Renderer::CommandVisitor::operator()(DrawCommand& aJob)
   {
-    mRenderer->mD3DDeviceContext->DrawIndexed(6, 0, 0);
+    mRenderer->mD3DDeviceContext->DrawIndexed(aJob.mIndexCount, 0, 0);
   }
 
   void DX11Renderer::ExecuteCommandList(GPUCommandList& aList)

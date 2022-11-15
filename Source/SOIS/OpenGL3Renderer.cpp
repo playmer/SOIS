@@ -148,7 +148,7 @@ namespace SOIS
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
 
     // Create window with graphics context
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -398,7 +398,7 @@ namespace SOIS
 
   void OpenGL45Renderer::CommandVisitor::operator()(DrawCommand& aJob)
   {
-    gl::glDrawElements(gl::GL_TRIANGLES, 6, gl::GL_UNSIGNED_INT, nullptr);
+    gl::glDrawElements(gl::GL_TRIANGLES, aJob.mIndexCount, gl::GL_UNSIGNED_INT, nullptr);
   }
 
   void OpenGL45Renderer::ExecuteCommandList(GPUCommandList& aList)

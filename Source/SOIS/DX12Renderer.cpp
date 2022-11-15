@@ -13,6 +13,19 @@ using namespace Microsoft::WRL;
 
 namespace SOIS
 {
+
+  struct DX12GPUPiplineData
+  {
+    Microsoft::WRL::ComPtr<ID3D11InputLayout> mInputLayout = nullptr;
+    Microsoft::WRL::ComPtr<ID3D11VertexShader> mVertexShader = nullptr;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader> mPixelShader = nullptr;
+  };
+
+  struct DX12GPUBufferData
+  {
+    Microsoft::WRL::ComPtr<ID3D12Resource> mBuffer = nullptr;
+  };
+
   ///////////////////////////////////////////////////////////////////
   // DX12 Texture
   class DX12Texture : public Texture
@@ -1381,5 +1394,58 @@ namespace SOIS
     
     aCommandBuffer->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, NULL);
     aCommandBuffer->ResourceBarrier(1, &barrier);
+  }
+
+
+
+  void DX12Renderer::CommandVisitor::operator()(RenderStateCommand& aJob)
+  {
+    mCommandList->RSSetViewports(1, &viewport);
+    mCommandList->OMSetRenderTargets(1, &mMainRenderTargetView, nullptr);
+    mCommandList->ClearRenderTargetView(mMainRenderTargetView, color.data());
+  }
+  void DX12Renderer::CommandVisitor::operator()(BindVertexBufferCommand& aJob)
+  {
+    std::vector<ID3D11Buffer*> buffers;
+    buffers.resize(aJob.mGPUBuffers.size());
+
+    for (auto& buffer : aJob.mGPUBuffers)
+    {
+      buffers.push_back(GetDataFromGPUObject(buffer).Get<DX12GPUBufferData>()->mBuffer.Get());
+    }
+
+    mCommandList->IASetVertexBuffers(
+      0,
+      buffers.size(),
+      buffers.data(),
+      &cVertexStride,
+      &cVertexOffset);
+  }
+  void DX12Renderer::CommandVisitor::operator()(BindIndexBufferCommand& aJob)
+  {
+    auto bufferData = GetDataFromGPUObject(aJob.mGPUBuffer).Get<DX12GPUBufferData>();
+    mCommandList->IASetIndexBuffer(bufferData->mBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+  }
+  void DX12Renderer::CommandVisitor::operator()(BindPipelineCommand& aJob)
+  {
+    auto pipelineData = GetDataFromGPUObject(aJob.mPipeline).Get<DX12GPUPiplineData>();
+
+    mCommandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    mCommandList->IASetInputLayout(pipelineData->mInputLayout.Get());
+    mCommandList->VSSetShader(pipelineData->mVertexShader.Get(), nullptr, 0);
+    mCommandList->PSSetShader(pipelineData->mPixelShader.Get(), nullptr, 0);
+  }
+  void DX12Renderer::CommandVisitor::operator()(DrawCommand& aJob)
+  {
+    mCommandList->DrawIndexed(aJob.mIndexCount, 0, 0);
+  }
+
+  void DX12Renderer::ExecuteCommandList(GPUCommandList& aList)
+  {
+    CommandVisitor visitor{ this };
+    for (auto& command : GetCommandsFromList(aList))
+    {
+      std::visit(visitor, command);
+    }
   }
 }
