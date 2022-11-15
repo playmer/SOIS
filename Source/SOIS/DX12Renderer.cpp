@@ -70,125 +70,125 @@ namespace SOIS
   };
 
 
-  DX12GPUAllocator::DX12GPUAllocator(
-    std::string const& aAllocatorType,
-    size_t aBlockSize,
-    DX12Renderer* aRenderer)
-    : GPUAllocator{ aBlockSize }
-  {
-    auto self = mData.ConstructAndGet<DX12GPUAllocatorData>(aRenderer);
-  }
+  //DX12GPUAllocator::DX12GPUAllocator(
+  //  std::string const& aAllocatorType,
+  //  size_t aBlockSize,
+  //  DX12Renderer* aRenderer)
+  //  : GPUAllocator{ aBlockSize }
+  //{
+  //  auto self = mData.ConstructAndGet<DX12GPUAllocatorData>(aRenderer);
+  //}
 
-  DX12UBOUpdates::DX12UBOReference::DX12UBOReference(Microsoft::WRL::ComPtr<ID3D12Resource> const& aBuffer,
-    size_t aBufferOffset,
-    size_t aSize,
-    D3D12_RESOURCE_STATES aState)
-    : mBuffer(aBuffer)
-    , mBufferOffset{ aBufferOffset }
-    , mSize{ aSize }
-    , mState{ aState }
-  {
-
-  }
-
-  void DX12UBOUpdates::Add(DX12UBOData const& aBuffer,
-    uint8_t const* aData,
-    size_t aSize,
-    size_t aOffset)
-  {
-    std::lock_guard<std::mutex> lock(mAddingMutex);
-
-    auto& resource = aBuffer.mBuffer;
-
-    mReferences.emplace_back(resource, aOffset, aSize, aBuffer.mState);
-    mData.insert(mData.end(), aData, aData + aSize);
-
-    // Populate the transition buffer now, this saves us from an N operation when doing
-    // the buffer copies.
-    mTransitionBarriers.emplace_back(CD3DX12_RESOURCE_BARRIER::Transition(
-      resource.Get(),
-      aBuffer.mState,
-      D3D12_RESOURCE_STATE_COPY_DEST));
-  }
-
-  void DX12UBOUpdates::Update(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>& aCommandBuffer)
-  {
-    std::lock_guard<std::mutex> lock(mAddingMutex);
-
-    auto size = mData.size();
-
-    if (0 == size)
-    {
-      return;
-    }
-
-    // Create a new buffer if we either don't currently have one, or if our current one
-    // isn't big enough.
-    if ((nullptr == mMappingBuffer) || size < mMappingBufferSize)
-    {
-      auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-      auto resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(size);
-      
-      ThrowIfFailed(mRenderer->mDevice->CreateCommittedResource(
-        &heapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &resourceDescription,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&mMappingBuffer)));
-
-      mMappingBufferSize = size;
-    }
-
-    // Copy data over to the upload buffer.
-    void* pData;
-    CD3DX12_RANGE readRange(0, 0); // We don't need to read any data from this buffer.
-
-    ThrowIfFailed(mMappingBuffer->Map(0, &readRange, &pData));
-    std::memcpy(pData, mData.data(), size);
-
-    CD3DX12_RANGE writeRange(0, size);
-    mMappingBuffer->Unmap(0, &writeRange);
-
-    size_t dataOffset = 0;
-
-    // Transition our buffers to their copy states.
-    aCommandBuffer->ResourceBarrier(static_cast<uint32_t>(mTransitionBarriers.size()), mTransitionBarriers.data());
-
-    // Copy from the upload buffer to all the buffers added this frame.
-    for (auto const& reference : mReferences)
-    {
-      aCommandBuffer->CopyBufferRegion(
-        reference.mBuffer.Get(),
-        reference.mBufferOffset,
-        mMappingBuffer.Get(),
-        dataOffset,
-        reference.mSize);
-
-      dataOffset += reference.mSize;
-    }
-
-    // We now know the number of resources we're copying, so we can remove the transitions to 
-    // the copy state. Then we can create Transition barriers to move buffers back to their 
-    // original resource states 
-    mTransitionBarriers.clear();
-
-    for (auto& reference : mReferences)
-    {
-      mTransitionBarriers.emplace_back(CD3DX12_RESOURCE_BARRIER::Transition(
-        reference.mBuffer.Get(),
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        reference.mState));
-    }
-
-    // And transition the barriers to their final states
-    aCommandBuffer->ResourceBarrier(static_cast<uint32_t>(mTransitionBarriers.size()), mTransitionBarriers.data());
-
-    // Frame cleanup.
-    mData.clear();
-    mReferences.clear();
-    mTransitionBarriers.clear();
-  }
+  //DX12UBOUpdates::DX12UBOReference::DX12UBOReference(Microsoft::WRL::ComPtr<ID3D12Resource> const& aBuffer,
+  //  size_t aBufferOffset,
+  //  size_t aSize,
+  //  D3D12_RESOURCE_STATES aState)
+  //  : mBuffer(aBuffer)
+  //  , mBufferOffset{ aBufferOffset }
+  //  , mSize{ aSize }
+  //  , mState{ aState }
+  //{
+  //
+  //}
+  //
+  //void DX12UBOUpdates::Add(DX12UBOData const& aBuffer,
+  //  uint8_t const* aData,
+  //  size_t aSize,
+  //  size_t aOffset)
+  //{
+  //  std::lock_guard<std::mutex> lock(mAddingMutex);
+  //
+  //  auto& resource = aBuffer.mBuffer;
+  //
+  //  mReferences.emplace_back(resource, aOffset, aSize, aBuffer.mState);
+  //  mData.insert(mData.end(), aData, aData + aSize);
+  //
+  //  // Populate the transition buffer now, this saves us from an N operation when doing
+  //  // the buffer copies.
+  //  mTransitionBarriers.emplace_back(CD3DX12_RESOURCE_BARRIER::Transition(
+  //    resource.Get(),
+  //    aBuffer.mState,
+  //    D3D12_RESOURCE_STATE_COPY_DEST));
+  //}
+  //
+  //void DX12UBOUpdates::Update(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>& aCommandBuffer)
+  //{
+  //  std::lock_guard<std::mutex> lock(mAddingMutex);
+  //
+  //  auto size = mData.size();
+  //
+  //  if (0 == size)
+  //  {
+  //    return;
+  //  }
+  //
+  //  // Create a new buffer if we either don't currently have one, or if our current one
+  //  // isn't big enough.
+  //  if ((nullptr == mMappingBuffer) || size < mMappingBufferSize)
+  //  {
+  //    auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+  //    auto resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(size);
+  //    
+  //    ThrowIfFailed(mRenderer->mDevice->CreateCommittedResource(
+  //      &heapProps,
+  //      D3D12_HEAP_FLAG_NONE,
+  //      &resourceDescription,
+  //      D3D12_RESOURCE_STATE_GENERIC_READ,
+  //      nullptr,
+  //      IID_PPV_ARGS(&mMappingBuffer)));
+  //
+  //    mMappingBufferSize = size;
+  //  }
+  //
+  //  // Copy data over to the upload buffer.
+  //  void* pData;
+  //  CD3DX12_RANGE readRange(0, 0); // We don't need to read any data from this buffer.
+  //
+  //  ThrowIfFailed(mMappingBuffer->Map(0, &readRange, &pData));
+  //  std::memcpy(pData, mData.data(), size);
+  //
+  //  CD3DX12_RANGE writeRange(0, size);
+  //  mMappingBuffer->Unmap(0, &writeRange);
+  //
+  //  size_t dataOffset = 0;
+  //
+  //  // Transition our buffers to their copy states.
+  //  aCommandBuffer->ResourceBarrier(static_cast<uint32_t>(mTransitionBarriers.size()), mTransitionBarriers.data());
+  //
+  //  // Copy from the upload buffer to all the buffers added this frame.
+  //  for (auto const& reference : mReferences)
+  //  {
+  //    aCommandBuffer->CopyBufferRegion(
+  //      reference.mBuffer.Get(),
+  //      reference.mBufferOffset,
+  //      mMappingBuffer.Get(),
+  //      dataOffset,
+  //      reference.mSize);
+  //
+  //    dataOffset += reference.mSize;
+  //  }
+  //
+  //  // We now know the number of resources we're copying, so we can remove the transitions to 
+  //  // the copy state. Then we can create Transition barriers to move buffers back to their 
+  //  // original resource states 
+  //  mTransitionBarriers.clear();
+  //
+  //  for (auto& reference : mReferences)
+  //  {
+  //    mTransitionBarriers.emplace_back(CD3DX12_RESOURCE_BARRIER::Transition(
+  //      reference.mBuffer.Get(),
+  //      D3D12_RESOURCE_STATE_COPY_DEST,
+  //      reference.mState));
+  //  }
+  //
+  //  // And transition the barriers to their final states
+  //  aCommandBuffer->ResourceBarrier(static_cast<uint32_t>(mTransitionBarriers.size()), mTransitionBarriers.data());
+  //
+  //  // Frame cleanup.
+  //  mData.clear();
+  //  mReferences.clear();
+  //  mTransitionBarriers.clear();
+  //}
 
 
   //////////////////////////////////////////////////////////////////////////////////////////////
@@ -825,8 +825,7 @@ namespace SOIS
   //////////////////////////////////////////////////////////////////////////////////////////////
   // Renderer
   DX12Renderer::DX12Renderer()
-    : mUBOUpdates{ this }
-    , mUploadJobsWakeUp{ 0 }
+  //  : mUBOUpdates{ this }
   {
   }
 
@@ -928,7 +927,6 @@ namespace SOIS
     mCurrentBackBufferIndex = mSwapChain->GetCurrentBackBufferIndex();
 
     auto commandBuffer = mGraphicsQueue.WaitOnNextCommandList();
-    mTexturesToDestroyNextFrame.clear();
   }
 
 
@@ -1015,23 +1013,23 @@ namespace SOIS
     }
   }
 
-  GPUAllocator* DX12Renderer::MakeAllocator(std::string const& aAllocatorType, size_t aBlockSize)
-  {
-    auto it = mAllocators.find(aAllocatorType);
-
-    if (it != mAllocators.end())
-    {
-      return it->second.get();
-    }
-
-    auto allocator = std::make_unique<DX12GPUAllocator>(aAllocatorType, aBlockSize, this);
-
-    auto ptr = allocator.get();
-
-    mAllocators.emplace(aAllocatorType, std::move(allocator));
-
-    return ptr;
-  }
+  //GPUAllocator* DX12Renderer::MakeAllocator(std::string const& aAllocatorType, size_t aBlockSize)
+  //{
+  //  auto it = mAllocators.find(aAllocatorType);
+  //
+  //  if (it != mAllocators.end())
+  //  {
+  //    return it->second.get();
+  //  }
+  //
+  //  auto allocator = std::make_unique<DX12GPUAllocator>(aAllocatorType, aBlockSize, this);
+  //
+  //  auto ptr = allocator.get();
+  //
+  //  mAllocators.emplace(aAllocatorType, std::move(allocator));
+  //
+  //  return ptr;
+  //}
 
 
 
@@ -1131,35 +1129,35 @@ namespace SOIS
   //std::unique_ptr<GPUBufferBase> DX12GPUAllocator::CreateBufferInternal(size_t aSize,
   //  GPUAllocation::BufferUsage aUsage,
   //  GPUAllocation::MemoryProperty aProperties)
-  std::unique_ptr<GPUBufferBase> DX12GPUAllocator::CreateBufferInternal(
-    size_t aSize,
-    GPUAllocation::BufferUsage aUse,
-    GPUAllocation::MemoryProperty aProperties)
-  {
-    auto self = mData.Get<DX12GPUAllocatorData>();
-
-    auto base = std::make_unique<DX12UBO>(aSize);
-    auto uboData = base->GetData().ConstructAndGet<DX12UBOData>();
-
-    auto usage = ToDX12(aUse);
-    auto property = ToDX12(aProperties);
-
-    auto heapProps = CD3DX12_HEAP_PROPERTIES(property);
-    auto bufferDescription = CD3DX12_RESOURCE_DESC::Buffer(aSize, D3D12_RESOURCE_FLAG_NONE);
-    ThrowIfFailed(self->mRenderer->mDevice->CreateCommittedResource(
-      &heapProps,
-      D3D12_HEAP_FLAG_NONE,
-      &bufferDescription,
-      usage,
-      nullptr,
-      IID_PPV_ARGS(&base->GetBuffer())
-    ));
-
-    uboData->mRenderer = self->mRenderer;
-    uboData->mState = usage;
-
-    return static_unique_pointer_cast<GPUBufferBase>(std::move(base));
-  }
+  //std::unique_ptr<GPUBufferBase> DX12GPUAllocator::CreateBufferInternal(
+  //  size_t aSize,
+  //  GPUAllocation::BufferUsage aUse,
+  //  GPUAllocation::MemoryProperty aProperties)
+  //{
+  //  auto self = mData.Get<DX12GPUAllocatorData>();
+  //
+  //  auto base = std::make_unique<DX12UBO>(aSize);
+  //  auto uboData = base->GetData().ConstructAndGet<DX12UBOData>();
+  //
+  //  auto usage = ToDX12(aUse);
+  //  auto property = ToDX12(aProperties);
+  //
+  //  auto heapProps = CD3DX12_HEAP_PROPERTIES(property);
+  //  auto bufferDescription = CD3DX12_RESOURCE_DESC::Buffer(aSize, D3D12_RESOURCE_FLAG_NONE);
+  //  ThrowIfFailed(self->mRenderer->mDevice->CreateCommittedResource(
+  //    &heapProps,
+  //    D3D12_HEAP_FLAG_NONE,
+  //    &bufferDescription,
+  //    usage,
+  //    nullptr,
+  //    IID_PPV_ARGS(&base->GetBuffer())
+  //  ));
+  //
+  //  uboData->mRenderer = self->mRenderer;
+  //  uboData->mState = usage;
+  //
+  //  return static_unique_pointer_cast<GPUBufferBase>(std::move(base));
+  //}
   
   static DXGI_FORMAT FromSOIS(TextureLayout aLayout)
   {
@@ -1226,99 +1224,6 @@ namespace SOIS
     //mTexturesCreatedThisFrame.clear();
   }
 
-  std::unique_ptr<Texture> DX12Renderer::LoadTextureFromData(unsigned char* aData, TextureLayout aFormat, int aWidth, int aHeight, int pitch)
-  {
-    // Create texture resource
-    D3D12_HEAP_PROPERTIES props;
-    memset(&props, 0, sizeof(D3D12_HEAP_PROPERTIES));
-    props.Type = D3D12_HEAP_TYPE_DEFAULT;
-    props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-    props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-
-    D3D12_RESOURCE_DESC desc;
-    ZeroMemory(&desc, sizeof(desc));
-    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Alignment = 0;
-    desc.Width = aWidth;
-    desc.Height = aHeight;
-    desc.DepthOrArraySize = 1;
-    desc.MipLevels = 1;
-    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    desc.SampleDesc.Count = 1;
-    desc.SampleDesc.Quality = 0;
-    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-    ID3D12Resource* pTexture = NULL;
-    mDevice->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc,
-      D3D12_RESOURCE_STATE_COPY_DEST, NULL, IID_PPV_ARGS(&pTexture));
-
-    // Create a temporary upload resource to move the data in
-    UINT uploadPitch = (aWidth * 4 + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) & ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
-    UINT uploadSize = aHeight * uploadPitch;
-    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    desc.Alignment = 0;
-    desc.Width = uploadSize;
-    desc.Height = 1;
-    desc.DepthOrArraySize = 1;
-    desc.MipLevels = 1;
-    desc.Format = DXGI_FORMAT_UNKNOWN;
-    desc.SampleDesc.Count = 1;
-    desc.SampleDesc.Quality = 0;
-    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-    props.Type = D3D12_HEAP_TYPE_UPLOAD;
-    props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-    props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-
-    ID3D12Resource* uploadBuffer = NULL;
-    HRESULT hr = mDevice->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc,
-      D3D12_RESOURCE_STATE_GENERIC_READ, NULL, IID_PPV_ARGS(&uploadBuffer));
-    IM_ASSERT(SUCCEEDED(hr));
-
-    // Write pixels into the upload resource
-    void* mapped = NULL;
-    D3D12_RANGE range = { 0, uploadSize };
-    hr = uploadBuffer->Map(0, &range, &mapped);
-    IM_ASSERT(SUCCEEDED(hr));
-    for (int y = 0; y < aHeight; y++)
-      memcpy((void*)((uintptr_t)mapped + y * uploadPitch), aData + y * aWidth * 4, aWidth * 4);
-    uploadBuffer->Unmap(0, &range);
-
-    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDescription = {
-      D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-      1,
-      D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-      0
-    };
-    ID3D12DescriptorHeap* srvDescHeap = nullptr;
-    if (mDevice.Get()->CreateDescriptorHeap(&srvHeapDescription, IID_PPV_ARGS(&srvDescHeap)) != S_OK)
-      return nullptr;
-
-    UINT handle_increment = mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    int descriptor_index = 0; // The descriptor table index to use (not normally a hard-coded constant, but in this case we'll assume we have slot 1 reserved for us)
-    D3D12_CPU_DESCRIPTOR_HANDLE my_texture_srv_cpu_handle = srvDescHeap->GetCPUDescriptorHandleForHeapStart();
-    my_texture_srv_cpu_handle.ptr += (handle_increment * descriptor_index);
-    D3D12_GPU_DESCRIPTOR_HANDLE my_texture_srv_gpu_handle = srvDescHeap->GetGPUDescriptorHandleForHeapStart();
-    my_texture_srv_gpu_handle.ptr += (handle_increment * descriptor_index);
-
-
-    // Create a shader resource view for the texture
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
-    ZeroMemory(&srvDesc, sizeof(srvDesc));
-    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = desc.MipLevels;
-    srvDesc.Texture2D.MostDetailedMip = 0;
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-    mDevice->CreateShaderResourceView(pTexture, &srvDesc, my_texture_srv_cpu_handle);
-
-    mTexturesCreatedThisFrame.emplace_back(aWidth, aHeight, uploadPitch, pTexture, uploadBuffer);
-
-    return std::make_unique<DX12Texture>(pTexture, srvDescHeap, my_texture_srv_gpu_handle, aWidth, aHeight);
-  }
 
 
   std::future<std::unique_ptr<Texture>> DX12Renderer::LoadTextureFromDataAsync(unsigned char* aData, TextureLayout aFormat, int aWidth, int aHeight, int aPitch)

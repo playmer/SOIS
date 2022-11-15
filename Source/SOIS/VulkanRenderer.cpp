@@ -207,7 +207,6 @@ namespace SOIS
   //////////////////////////////////////////////////////////////////////////////////////////////
   // Renderer
   VulkanRenderer::VulkanRenderer()
-    : mUploadJobsWakeUp{0}
   {
 
   }
@@ -278,7 +277,7 @@ namespace SOIS
     instance_builder
       .set_app_name("Application")
       .set_engine_name("SOIS")
-      .require_api_version(1, 0, 0)
+      .require_api_version(1, 2, 0)
       .set_debug_callback(&DebugUtilsCallback);
 
     auto system_info_ret = vkb::SystemInfo::get_system_info();

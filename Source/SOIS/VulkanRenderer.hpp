@@ -130,9 +130,6 @@ namespace SOIS
 
     SDL_WindowFlags GetAdditionalWindowFlags() override;
 
-    std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) override { return nullptr;  };
-
-
     void RecreateSwapchain();
 
     VkRenderPass CreateRenderPass();
@@ -227,8 +224,6 @@ namespace SOIS
 
     friend UploadJob;
     std::vector<UploadJob> mUploadJobs;
-    std::mutex mUploadJobsMutex;
-    std::counting_semaphore<std::numeric_limits<std::ptrdiff_t>::max()> mUploadJobsWakeUp;
 
     static constexpr uint32_t cMinImageCount = 3;
 

@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include <glbinding/gl/gl.h>
+#include <glbinding/gl45/gl.h>
 #include <glbinding/glbinding.h>
 
 
@@ -16,6 +16,17 @@
 
 namespace SOIS
 {
+  struct OpenGL45GPUPiplineData
+  {
+    gl::GLuint mShaderProgram;
+    gl::GLuint mVertexArrayObject;
+  };
+
+  struct OpenGL45GPUBufferData
+  {
+    gl::GLuint mBuffer;
+  };
+
   static char const* Source(gl::GLenum source)
   {
     switch (source)
@@ -69,6 +80,8 @@ namespace SOIS
       const gl::GLchar* message,
       const void* userParam)
   {
+    (void)id; (void)length; (void)userParam;
+
     if (gl::GL_DEBUG_SEVERITY_NOTIFICATION == severity)
     {
       return;
@@ -81,40 +94,62 @@ namespace SOIS
       message);
   }
 
+  static gl::GLenum FromSOIS(TextureLayout aLayout)
+  {
+    switch (aLayout)
+    {
+    case TextureLayout::RGBA_Unorm: return gl::GLenum::GL_RGBA;
+    case TextureLayout::RGBA_Srgb: return gl::GLenum::GL_RGBA;
+    case TextureLayout::Bc1_Rgba_Srgb: return gl::GLenum::GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
+    case TextureLayout::Bc3_Srgb: return gl::GLenum::GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT;
+
+    case TextureLayout::Bc1_Rgba_Unorm: //return DXGI_FORMAT_A8_UNORM;
+    case TextureLayout::Bc3_Unorm: //return DXGI_FORMAT_BC3_UNORM;
+    case TextureLayout::Bc7_Unorm: //return DXGI_FORMAT_BC7_UNORM;
+    case TextureLayout::Bc7_Srgb: //return DXGI_FORMAT_BC7_UNORM_SRGB;
+    default:
+    case TextureLayout::InvalidLayout: return (gl::GLenum)0;
+    }
+  }
+
   glbinding::ProcAddress GLFunctionLoader(const char* aName)
   {
     return reinterpret_cast<glbinding::ProcAddress>(SDL_GL_GetProcAddress(aName));
   }
 
-  // Decide GL+GLSL versions
-#if __APPLE__
-    // GL 3.2 Core + GLSL 150
-  static const char* gGlslVersion = "#version 150";
-#else
-    // GL 3.0 + GLSL 130
-  static const char* gGlslVersion = "#version 130";
-#endif
-
-  OpenGL3Renderer::OpenGL3Renderer()
-    : Renderer{}
-    , mUploadJobsWakeUp{ 0 }
+  class OpenGL3Texture : public Texture
   {
-    // Decide GL+GLSL versions
-#if __APPLE__
-    // GL 3.2 Core + GLSL 150
-    const char* glsl_version = "#version 150";
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG); // Always required on Mac
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
-#else
-    // GL 3.0 + GLSL 130
-    const char* glsl_version = "#version 130";
+  public:
+    OpenGL3Texture(gl::GLuint aTextureHandle, int aWidth, int aHeight)
+      : Texture{ aWidth, aHeight }
+      , mTextureHandle{ aTextureHandle }
+    {
+
+    }
+
+    ~OpenGL3Texture() override
+    {
+    }
+
+    virtual ImTextureID GetTextureId()
+    {
+      return ImTextureID{ (void*)mTextureHandle };
+    };
+
+    gl::GLuint mTextureHandle;
+  };
+
+    // GL 4.1 + GLSL 400
+  static const char* gGlslVersion = "#version 400";
+
+  OpenGL45Renderer::OpenGL45Renderer()
+    : Renderer{}
+  {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-#endif
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+
     // Create window with graphics context
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
@@ -122,13 +157,13 @@ namespace SOIS
   }
 
 
-  SDL_WindowFlags OpenGL3Renderer::GetAdditionalWindowFlags()
+  SDL_WindowFlags OpenGL45Renderer::GetAdditionalWindowFlags()
   {
     return SDL_WINDOW_OPENGL;
   }
 
 
-  void OpenGL3Renderer::Initialize(SDL_Window* aWindow, char8_t const* /*aPreferredGpu*/)
+  void OpenGL45Renderer::Initialize(SDL_Window* aWindow, char8_t const* /*aPreferredGpu*/)
   {
     SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
     mWindow = aWindow;
@@ -160,7 +195,7 @@ namespace SOIS
 
 
 
-  OpenGL3Renderer::~OpenGL3Renderer()
+  OpenGL45Renderer::~OpenGL45Renderer()
   {
     mShouldJoin = true;
     mUploadJobsWakeUp.release();
@@ -170,10 +205,20 @@ namespace SOIS
   }
 
 
-  void OpenGL3Renderer::UploadThread()
+  void OpenGL45Renderer::UploadThread()
   {
+    struct UploadedJob
+    {
+      std::promise<std::unique_ptr<SOIS::Texture>> mTexturePromise;
+      gl::GLsync mSync;
+      gl::GLuint mTexture;
+      int mWidth;
+      int mHeight;
+    };
+
     SDL_GL_MakeCurrent(mWindow, mUploadContext);
     std::vector<UploadJob> uploads;
+    std::vector<UploadedJob> uploadedJobs;
     //std::vector<UploadJob> transitions;
 
     while (!mShouldJoin)
@@ -182,79 +227,95 @@ namespace SOIS
       mUploadJobsMutex.lock();
       std::swap(uploads, mUploadJobs);
       mUploadJobsMutex.unlock();
-      /////////////////////////////////////////////
-      // Uploads accrued
-      //auto transferCommandList = mTransferQueue.WaitOnNextCommandList();
-      //
-      //transferCommandList.Begin();
-      //for (auto& job : uploads)
-      //{
-      //  auto result = job(transferCommandList);
-      //
-      //  if (result.has_value())
-      //  {
-      //    transitions.emplace_back(std::move(result.value()));
-      //  }
-      //}
-      //
-      //transferCommandList.End();
-      //mTransferQueue.Submit(transferCommandList);
-      //
-      //if (VK_NULL_HANDLE != transferCommandList.mFence)
-      //{
-      //  vkWaitForFences(mDevice.device, 1, &transferCommandList.mFence, true, UINT64_MAX);
-      //}
-      //
-      //// Fulfill promises
-      //for (auto& job : uploads)
-      //{
-      //  job.FulfillPromise();
-      //}
-      //
-      ///////////////////////////////////////////////
-      //// Transitions accrued
-      //auto transitionCommandList = mTextureTransitionQueue.WaitOnNextCommandList();
-      //
-      //transitionCommandList.Begin();
-      //
-      //for (auto& textureTransfer : transitions)
-      //{
-      //  textureTransfer(transitionCommandList);
-      //}
-      //
-      //transitionCommandList.End();
-      //mTextureTransitionQueue.Submit(transitionCommandList);
-      //
-      //if (VK_NULL_HANDLE != transitionCommandList.mFence)
-      //{
-      //  vkWaitForFences(mDevice.device, 1, &transitionCommandList.mFence, true, UINT64_MAX);
-      //}
-      //
-      //// Fulfill promises
-      //for (auto& job : transitions)
-      //{
-      //  job.FulfillPromise();
-      //}
-      //
-      ///////////////////////////////////////////////
-      //// End
+
+      for (auto& upload : uploads)
+      {
+
+        // Create a OpenGL texture identifier
+        gl::GLuint image_texture;
+        gl::glGenTextures(1, &image_texture);
+        gl::glBindTexture(gl::GL_TEXTURE_2D, image_texture);
+
+        // Setup filtering parameters for display
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, gl::GL_LINEAR);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, gl::GL_LINEAR);
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, gl::GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
+        gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, gl::GL_CLAMP_TO_EDGE); // Same
+
+        // Upload pixels into texture
+#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+#endif
+        auto glFormat = FromSOIS(upload.mFormat);
+
+        gl::glTexImage2D(
+          gl::GLenum::GL_TEXTURE_2D, 
+          0, 
+          glFormat, 
+          upload.mWidth, 
+          upload.mHeight, 
+          0, 
+          glFormat, 
+          gl::GLenum::GL_UNSIGNED_BYTE,
+          static_cast<void*>(upload.mStoredTextureData.data()));
+        
+
+        uploadedJobs.emplace_back(
+          std::move(upload.mTexturePromise),
+          gl::glFenceSync(gl::GL_SYNC_GPU_COMMANDS_COMPLETE, 0),
+          image_texture,
+          upload.mWidth,
+          upload.mHeight
+        );
+      }
+
       uploads.clear();
+
+      // When calling glClientWaitSync, we need to ensure that the sync object has been placed into the GPU Command Queue,
+      // otherwise we may end up in an infinite loop. glFlush ensures it gets there. We could potentially pass 
+      // GL_SYNC_FLUSH_COMMANDS_BIT to glClientWaitSync, but as we're about to enter a waiting loop, it's easier to 
+      // simply flush all the sync commands to the GPU and then wait on them without needed to carefully juggle if we've
+      // passed that flag to glClientWaitSync _only_ the first time.
+      // Reference Note: https://www.khronos.org/opengl/wiki/Sync_Object#Flushing_and_contexts
+
+      gl::glFlush();
+
+      while (uploadedJobs.size())
+      {
+        for (auto uploadedIt = uploadedJobs.begin(); uploadedIt < uploadedJobs.end();)
+        {
+          gl::GLenum signalStatus = gl::glClientWaitSync(uploadedIt->mSync, gl::SyncObjectMask::GL_NONE_BIT, 1000000);
+          if ((gl::GL_ALREADY_SIGNALED  == signalStatus)
+              || (gl::GL_CONDITION_SATISFIED == signalStatus))
+          {
+            auto texture = std::make_unique<OpenGL3Texture>(uploadedIt->mTexture, uploadedIt->mWidth, uploadedIt->mHeight);
+
+            uploadedIt->mTexturePromise.set_value(std::unique_ptr<Texture>(texture.release()));
+            uploadedIt = uploadedJobs.erase(uploadedIt);
+          }
+          else
+          {
+            ++uploadedIt;
+          }
+        }
+      }
 
       mUploadJobsWakeUp.acquire();
     }
   }
 
-  void OpenGL3Renderer::NewFrame()
+  void OpenGL45Renderer::NewFrame()
   {
     ImGui_ImplOpenGL3_NewFrame();
   }
 
-  void OpenGL3Renderer::ResizeRenderTarget(unsigned int aWidth, unsigned int aHeight)
+  void OpenGL45Renderer::ResizeRenderTarget(unsigned int aWidth, unsigned int aHeight)
   {
+    (void)aWidth; (void)aHeight;
     // Nothing special here, taken care of when we clear the render target.
   }
 
-  void OpenGL3Renderer::ClearRenderTarget(glm::vec4 aClearColor)
+  void OpenGL45Renderer::ClearRenderTarget(glm::vec4 aClearColor)
   {
     // Clear the viewport to prepare for user rendering.
     SDL_GL_MakeCurrent(mWindow, mContext);
@@ -264,114 +325,114 @@ namespace SOIS
     gl::glClear(gl::GL_COLOR_BUFFER_BIT);
   }
 
-  void OpenGL3Renderer::RenderImguiData()
+  void OpenGL45Renderer::RenderImguiData()
   {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
   }
 
-  void OpenGL3Renderer::Present()
+  void OpenGL45Renderer::Present()
   {
     // Swap the buffers and prepare for next frame.
     SDL_GL_MakeCurrent(mWindow, mContext);
     SDL_GL_SwapWindow(mWindow);
 
-  }
+  } 
 
-  static gl::GLenum FromSOIS(TextureLayout aLayout)
-  {
-    switch (aLayout)
-    {
-    case TextureLayout::RGBA_Unorm: return gl::GL_RGBA;
-    case TextureLayout::RGBA_Srgb: return gl::GL_RGBA;
-    case TextureLayout::Bc1_Rgba_Srgb: return gl::GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
-    case TextureLayout::Bc3_Srgb: return gl::GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT;
-
-    case TextureLayout::Bc1_Rgba_Unorm: //return DXGI_FORMAT_A8_UNORM;
-    case TextureLayout::Bc3_Unorm: //return DXGI_FORMAT_BC3_UNORM;
-    case TextureLayout::Bc7_Unorm: //return DXGI_FORMAT_BC7_UNORM;
-    case TextureLayout::Bc7_Srgb: //return DXGI_FORMAT_BC7_UNORM_SRGB;
-    default:
-    case TextureLayout::InvalidLayout: return (gl::GLenum)0;
-    }
-  }
-
-  class OpenGL3Texture : public Texture
-  {
-  public:
-    OpenGL3Texture(gl::GLuint aTextureHandle, int aWidth, int aHeight)
-      : Texture{ aWidth, aHeight }
-      , mTextureHandle{ aTextureHandle }
-    {
-
-    }
-
-    ~OpenGL3Texture() override
-    {
-    }
-
-    virtual ImTextureID GetTextureId()
-    {
-      return ImTextureID{ (void*)mTextureHandle };
-    };
-
-    gl::GLuint mTextureHandle;
-  };
-
-  std::unique_ptr<Texture> OpenGL3Renderer::LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch)
-  {
-    // Create a OpenGL texture identifier
-    gl::GLuint image_texture;
-    gl::glGenTextures(1, &image_texture);
-    gl::glBindTexture(gl::GL_TEXTURE_2D, image_texture);
-
-    // Setup filtering parameters for display
-    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, gl::GL_LINEAR);
-    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, gl::GL_LINEAR);
-    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, gl::GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
-    gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, gl::GL_CLAMP_TO_EDGE); // Same
-
-    // Upload pixels into texture
-#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
-    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-#endif
-    gl::glTexImage2D(gl::GL_TEXTURE_2D, 0, FromSOIS(format), w, h, 0, FromSOIS(format), gl::GL_UNSIGNED_BYTE, data);
-
-    auto texture = std::make_unique<OpenGL3Texture>(image_texture, w, h);
-
-    return std::unique_ptr<Texture>(texture.release());
-  }
-
-
-  //
-  
-
-  std::future<std::unique_ptr<Texture>> OpenGL3Renderer::LoadTextureFromDataAsync(unsigned char* data, TextureLayout format, int w, int h, int pitch)
+  std::future<std::unique_ptr<Texture>> OpenGL45Renderer::LoadTextureFromDataAsync(unsigned char* data, TextureLayout format, int aWidth, int aHeight, int pitch)
   {
     std::vector<unsigned char> storedData;
-    storedData.resize(h * pitch);
+    storedData.resize(aHeight * pitch);
     memcpy(storedData.data(), data, storedData.size());
-    
-    
 
-    //// Create a OpenGL texture identifier
-    //gl::GLuint image_texture;
-    //gl::glGenTextures(1, &image_texture);
-    //gl::glBindTexture(gl::GL_TEXTURE_2D, image_texture);
-    //
-    //// Setup filtering parameters for display
-    //gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MIN_FILTER, gl::GL_LINEAR);
-    //gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_MAG_FILTER, gl::GL_LINEAR);
-    //gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_S, gl::GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
-    //gl::glTexParameteri(gl::GL_TEXTURE_2D, gl::GL_TEXTURE_WRAP_T, gl::GL_CLAMP_TO_EDGE); // Same
-    //
-    //// Upload pixels into texture
-    //#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
-    //    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-    //#endif
-    //gl::glTexImage2D(gl::GL_TEXTURE_2D, 0, FromSOIS(format), w, h, 0, FromSOIS(format), gl::GL_UNSIGNED_BYTE, data);
-    //
-    //auto texture = std::make_unique<OpenGL3Texture>(image_texture, w, h);
-    //
-    //return std::unique_ptr<Texture>(texture.release());
+    std::promise<std::unique_ptr<SOIS::Texture>> texturePromise;
+    std::future<std::unique_ptr<SOIS::Texture>> textureFuture = texturePromise.get_future();
+
+    {
+      std::unique_lock lock{ mUploadJobsMutex };
+      mUploadJobs.emplace_back(
+        std::move(texturePromise),
+        std::move(storedData),
+        format,
+        aWidth,
+        aHeight
+      );
+    }
+    mUploadJobsWakeUp.release(1);
+
+    return textureFuture;
   }
+
+
+  void OpenGL45Renderer::CommandVisitor::operator()(RenderStateCommand& aJob)
+  {
+    //gl::glViewport(0, 0, width, height);
+    //gl::glClearColor(mClearColor.r * mClearColor.a, mClearColor.g * mClearColor.a, mClearColor.b * mClearColor.a, mClearColor.a);
+    //gl::glClear(GL_COLOR_BUFFER_BIT);
+
+
+
+    //glDrawArrays(GL_TRIANGLES, 0, 3);
+  }
+  void OpenGL45Renderer::CommandVisitor::operator()(BindVertexBufferCommand& aJob)
+  {
+    for (auto& buffer : aJob.mGPUBuffers)
+    {
+      auto bufferId = GetDataFromGPUObject(buffer).Get<OpenGL45GPUBufferData>()->mBuffer;
+      gl::glVertexArrayVertexBuffer(mCurrentVertexArrayObject, 0, bufferId, 0, 32);
+    }
+  }
+
+  void OpenGL45Renderer::CommandVisitor::operator()(BindIndexBufferCommand& aJob)
+  {
+    auto pipelineData = GetDataFromGPUObject(aJob.mGPUBuffer).Get<OpenGL45GPUBufferData>();
+    gl::glVertexArrayElementBuffer(mCurrentVertexArrayObject, pipelineData->mBuffer);
+  }
+
+  void OpenGL45Renderer::CommandVisitor::operator()(BindPipelineCommand& aJob)
+  {
+    auto pipelineData = GetDataFromGPUObject(aJob.mPipeline).Get<OpenGL45GPUPiplineData>();
+    gl::glUseProgram(pipelineData->mShaderProgram);
+    gl::glBindVertexArray(pipelineData->mVertexArrayObject);
+    mCurrentVertexArrayObject = pipelineData->mVertexArrayObject;
+  }
+
+  void OpenGL45Renderer::CommandVisitor::operator()(DrawCommand& aJob)
+  {
+    gl::glDrawElements(gl::GL_TRIANGLES, 6, gl::GL_UNSIGNED_INT, nullptr);
+  }
+
+  void OpenGL45Renderer::ExecuteCommandList(GPUCommandList& aList)
+  {
+    CommandVisitor visitor{ this };
+    for (auto& command : GetCommandsFromList(aList))
+    {
+      std::visit(visitor, command);
+    }
+  }
+
+  //GPUAllocator* OpenGL45Renderer::MakeAllocator(std::string const& aAllocatorType, size_t aBlockSize)
+  //{
+  //  auto it = mAllocators.find(aAllocatorType);
+  //
+  //  if (it != mAllocators.end())
+  //  {
+  //    return it->second.get();
+  //  }
+  //
+  //  auto allocator = std::make_unique<OpenGL41GPUAllocator>(aAllocatorType, aBlockSize, this);
+  //
+  //  auto ptr = allocator.get();
+  //
+  //  mAllocators.emplace(aAllocatorType, std::move(allocator));
+  //
+  //  return ptr;
+  //}
+  //
+  //std::unique_ptr<GPUBufferBase> OpenGL41GPUAllocator::CreateBufferInternal(
+  //  size_t aSize,
+  //  GPUAllocation::BufferUsage aUse,
+  //  GPUAllocation::MemoryProperty aProperties)
+  //{
+  //
+  //}
 }

@@ -6,8 +6,15 @@ PRIVATE
     OpenGL3Creator.cpp
     OpenGL3Renderer.cpp
     OpenGL3Renderer.hpp
+    Pipeline.hpp
     Renderer.cpp
     Renderer.hpp
+
+
+    PrivateImplementation.hpp
+    Meta.hpp
+    TypeTraits.hpp
+    Types.hpp
 )
 
 find_package(Vulkan)

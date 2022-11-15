@@ -3,6 +3,8 @@
 #define NOMINMAX
 #include <d3d11.h>
 
+#include <optional>
+
 #include <wrl.h>
 
 #include <string>
@@ -13,6 +15,11 @@
 
 namespace SOIS
 {
+  struct DX11BufferData
+  {
+  
+  };
+
   class DX11Renderer : public Renderer
   {
   public:
@@ -28,6 +35,11 @@ namespace SOIS
     void RenderImguiData() override;
     void Present() override;
 
+    void ExecuteCommandList(GPUCommandList& aList) override;
+
+    void UploadThread();
+
+
 
     // Ostensibly private
     bool CreateDeviceD3D(HWND hWnd);
@@ -35,10 +47,80 @@ namespace SOIS
     void CleanupDeviceD3D();
     void CleanupRenderTarget();
 
-    std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) override;
+    std::future<std::unique_ptr<Texture>> LoadTextureFromDataAsync(unsigned char* data, TextureLayout format, int aWidth, int aHeight, int pitch) override;
 
-    Microsoft::WRL::ComPtr<ID3D11Device> mD3DDevice = nullptr;
+    struct CreateVertexBufferJob
+    {
+      std::promise<GPUBufferBase> mBufferPromise;
+      std::vector<byte> mData;
+    };
+
+    struct UpdateVertexBufferJob
+    {
+      Microsoft::WRL::ComPtr<ID3D11Buffer> mBuffer;
+      std::vector<byte> mData;
+    };
+
+    struct UploadTextureJob
+    {
+      std::promise<std::unique_ptr<SOIS::Texture>> mTexturePromise;
+      std::vector<unsigned char> mStoredTextureData;
+      TextureLayout mFormat;
+      int mWidth;
+      int mHeight;
+      int mPitch;
+    };
+
+    struct UploadedTextureJob
+    {
+      std::promise<std::unique_ptr<SOIS::Texture>> mTexturePromise;
+      Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mShaderResourceView;
+      int mWidth;
+      int mHeight;
+    };
+
+
+    struct CommandVisitor
+    {
+      CommandVisitor(DX11Renderer* aRenderer)
+        : mRenderer{ aRenderer }
+      {
+
+      }
+
+      void operator()(RenderStateCommand& aJob);
+      void operator()(BindVertexBufferCommand& aJob);
+      void operator()(BindIndexBufferCommand& aJob);
+      void operator()(BindPipelineCommand& aJob);
+      void operator()(DrawCommand& aJob);
+
+      DX11Renderer* mRenderer;
+    };
+
+    using Job = std::variant<CreateVertexBufferJob, UploadTextureJob, UploadedTextureJob>;
+
+    struct JobVisitor
+    {
+      JobVisitor(DX11Renderer* aRenderer)
+        : mRenderer{aRenderer}
+      {
+
+      }
+      std::optional<Job> operator()(CreateVertexBufferJob& aJob);
+      std::optional<Job> operator()(UpdateVertexBufferJob& aJob);
+      std::optional<Job> operator()(UploadTextureJob& aJob);
+      std::optional<Job> operator()(UploadedTextureJob& aJob);
+
+      DX11Renderer* mRenderer;
+    };
+
+    friend struct JobVisitor;
+
+    std::vector<Job> mUploadJobs;
+
+    Microsoft::WRL::ComPtr<ID3D11Device> mDevice = nullptr;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> mD3DDeviceContext = nullptr;
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext> mDeferredContext = nullptr;
     Microsoft::WRL::ComPtr<IDXGISwapChain> mSwapChain = nullptr;
     ID3D11RenderTargetView* mMainRenderTargetView = nullptr;
     SDL_Window* mWindow = nullptr;

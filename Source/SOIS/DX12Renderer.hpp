@@ -38,46 +38,46 @@ namespace SOIS
   };
 
 
-  struct DX12UBOUpdates
-  {
-    DX12UBOUpdates(DX12Renderer* aRenderer)
-      : mRenderer{ aRenderer }
-    {
-
-    }
-
-    struct DX12UBOReference
-    {
-      DX12UBOReference(Microsoft::WRL::ComPtr<ID3D12Resource> const& aBuffer,
-        size_t aBufferOffset,
-        size_t aSize,
-        D3D12_RESOURCE_STATES aState);
-
-      Microsoft::WRL::ComPtr<ID3D12Resource> mBuffer;
-      size_t mBufferOffset;
-      size_t mSize;
-      D3D12_RESOURCE_STATES mState;
-    };
-
-    void Add(DX12UBOData const& aBuffer, uint8_t const* aData, size_t aSize, size_t aOffset);
-
-    template <typename tType>
-    void Add(DX12UBOData const& aBuffer, tType const& aData, size_t aNumber = 1, size_t aOffset = 0)
-    {
-      Add(aBuffer, reinterpret_cast<u8 const*>(&aData), sizeof(tType) * aNumber, aOffset);
-    }
-
-    void Update(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>& aBuffer);
-
-    std::vector<uint8_t> mData;
-    std::mutex mAddingMutex;
-    std::vector<DX12UBOReference> mReferences;
-    Microsoft::WRL::ComPtr<ID3D12Resource> mMappingBuffer;
-    std::vector<CD3DX12_RESOURCE_BARRIER> mTransitionBarriers;
-    size_t mMappingBufferSize;
-
-    DX12Renderer* mRenderer;
-  };
+  //struct DX12UBOUpdates
+  //{
+  //  DX12UBOUpdates(DX12Renderer* aRenderer)
+  //    : mRenderer{ aRenderer }
+  //  {
+  //
+  //  }
+  //
+  //  struct DX12UBOReference
+  //  {
+  //    DX12UBOReference(Microsoft::WRL::ComPtr<ID3D12Resource> const& aBuffer,
+  //      size_t aBufferOffset,
+  //      size_t aSize,
+  //      D3D12_RESOURCE_STATES aState);
+  //
+  //    Microsoft::WRL::ComPtr<ID3D12Resource> mBuffer;
+  //    size_t mBufferOffset;
+  //    size_t mSize;
+  //    D3D12_RESOURCE_STATES mState;
+  //  };
+  //
+  //  void Add(DX12UBOData const& aBuffer, uint8_t const* aData, size_t aSize, size_t aOffset);
+  //
+  //  template <typename tType>
+  //  void Add(DX12UBOData const& aBuffer, tType const& aData, size_t aNumber = 1, size_t aOffset = 0)
+  //  {
+  //    Add(aBuffer, reinterpret_cast<u8 const*>(&aData), sizeof(tType) * aNumber, aOffset);
+  //  }
+  //
+  //  void Update(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>& aBuffer);
+  //
+  //  std::vector<uint8_t> mData;
+  //  std::mutex mAddingMutex;
+  //  std::vector<DX12UBOReference> mReferences;
+  //  Microsoft::WRL::ComPtr<ID3D12Resource> mMappingBuffer;
+  //  std::vector<CD3DX12_RESOURCE_BARRIER> mTransitionBarriers;
+  //  size_t mMappingBufferSize;
+  //
+  //  DX12Renderer* mRenderer;
+  //};
 
   class Dx12Queue;
   struct DX12CommandBuffer
@@ -187,7 +187,6 @@ namespace SOIS
 
 //    void CopyTextureSubresource(const std::shared_ptr<DX12Texture>& texture, uint32_t firstSubresource, uint32_t numSubresources, D3D12_SUBRESOURCE_DATA* subresourceData);
 
-    std::unique_ptr<Texture> LoadTextureFromData(unsigned char* data, TextureLayout format, int w, int h, int pitch) override;
     std::future<std::unique_ptr<Texture>> LoadTextureFromDataAsync(unsigned char* data, TextureLayout format, int w, int h, int pitch) override;
     void UploadThread();
     struct UploadJob
@@ -246,42 +245,9 @@ namespace SOIS
       std::variant<Texture, TextureTransition, Buffer> mVariant;
     };
     std::vector<UploadJob> mUploadJobs;
-    std::mutex mUploadJobsMutex;
-    std::counting_semaphore<std::numeric_limits<std::ptrdiff_t>::max()> mUploadJobsWakeUp;
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    GPUAllocator* MakeAllocator(std::string const& aAllocatorType, size_t aBlockSize) override;
+    //GPUAllocator* MakeAllocator(std::string const& aAllocatorType, size_t aBlockSize) override;
 
     SDL_Window* mWindow = nullptr;
 
@@ -300,45 +266,8 @@ namespace SOIS
     
     std::vector<TextureTransferData> mTexturesCreatedThisFrame;
     
-    
-    struct TextureDestroyer
-    {
-      Microsoft::WRL::ComPtr<ID3D12Resource> mTexture;
-    };
-    
-    std::vector<TextureDestroyer> mTexturesToDestroyNextFrame;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    DX12UBOUpdates mUBOUpdates;
+    //DX12UBOUpdates mUBOUpdates;
 
 
     Microsoft::WRL::ComPtr<ID3D12Device2> mDevice;
@@ -347,8 +276,6 @@ namespace SOIS
     Dx12Queue mTextureTransitionQueue;
     Dx12Queue mGraphicsQueue;
     Dx12Queue mComputeQueue;
-
-
 
     Microsoft::WRL::ComPtr<IDXGISwapChain4> mSwapChain;
     Microsoft::WRL::ComPtr<ID3D12Resource> mBackBuffers[cNumFramesInFlight];
@@ -371,37 +298,37 @@ namespace SOIS
     std::vector<ID3D12DescriptorHeap*> mHeaps;
   };
 
-  class DX12UBO : public GPUBufferBase
-  {
-  public:
-    DX12UBO(size_t aSize)
-      : GPUBufferBase{ aSize }
-    {
+  //class DX12UBO : public GPUBufferBase
+  //{
+  //public:
+  //  DX12UBO(size_t aSize)
+  //    : GPUBufferBase{ aSize }
+  //  {
+  //
+  //  }
+  //
+  //  void Update(uint8_t const* aPointer, size_t aBytes, size_t aOffset) override
+  //  {
+  //    auto self = mData.Get<DX12UBOData>();
+  //
+  //    self->mRenderer->mUBOUpdates.Add(*self, aPointer, aBytes, aOffset);
+  //  }
+  //
+  //  Microsoft::WRL::ComPtr<ID3D12Resource>& GetBuffer()
+  //  {
+  //    auto self = mData.Get<DX12UBOData>();
+  //
+  //    return self->mBuffer;
+  //  }
+  //};
 
-    }
-
-    void Update(uint8_t const* aPointer, size_t aBytes, size_t aOffset) override
-    {
-      auto self = mData.Get<DX12UBOData>();
-
-      self->mRenderer->mUBOUpdates.Add(*self, aPointer, aBytes, aOffset);
-    }
-
-    Microsoft::WRL::ComPtr<ID3D12Resource>& GetBuffer()
-    {
-      auto self = mData.Get<DX12UBOData>();
-
-      return self->mBuffer;
-    }
-  };
-
-  class DX12GPUAllocator : public GPUAllocator
-  {
-  public:
-    DX12GPUAllocator(std::string const& aAllocatorType, size_t aBlockSize, DX12Renderer* aRenderer);
-    std::unique_ptr<GPUBufferBase> CreateBufferInternal(
-      size_t aSize,
-      GPUAllocation::BufferUsage aUse,
-      GPUAllocation::MemoryProperty aProperties) override;
-  };
+  //class DX12GPUAllocator : public GPUAllocator
+  //{
+  //public:
+  //  DX12GPUAllocator(std::string const& aAllocatorType, size_t aBlockSize, DX12Renderer* aRenderer);
+  //  std::unique_ptr<GPUBufferBase> CreateBufferInternal(
+  //    size_t aSize,
+  //    GPUAllocation::BufferUsage aUse,
+  //    GPUAllocation::MemoryProperty aProperties) override;
+  //};
 }
