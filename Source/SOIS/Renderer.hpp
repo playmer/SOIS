@@ -286,6 +286,16 @@ namespace SOIS
     PrivateImplementationLocal<32> mData;
   };
 
+  struct ViewPort
+  {
+    float    x;
+    float    y;
+    float    width;
+    float    height;
+    float    minDepth;
+    float    maxDepth;
+  };
+
   struct ClearColor
   {
     u8 r, g, b, a;
@@ -294,6 +304,7 @@ namespace SOIS
   struct RenderStateCommand
   {
     ClearColor mColor;
+    ViewPort mViewPort;
   };
 
   struct BindVertexBufferCommand

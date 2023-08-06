@@ -13,6 +13,7 @@
 #include <mutex>
 #include <queue>
 #include <string>
+#include <optional>
 
 #include <SDL.h>
 

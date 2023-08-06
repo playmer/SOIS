@@ -359,9 +359,25 @@ namespace SOIS
 
   void DX11Renderer::CommandVisitor::operator()(RenderStateCommand& aJob)
   {
+    FLOAT clearColor[]{
+      aJob.mColor.r / 256.f,
+      aJob.mColor.g / 256.f,
+      aJob.mColor.b / 256.f,
+      aJob.mColor.a / 256.f,
+    };
+
+    D3D11_VIEWPORT viewport{
+      aJob.mViewPort.x,
+      aJob.mViewPort.y,
+      aJob.mViewPort.width,
+      aJob.mViewPort.height,
+      aJob.mViewPort.minDepth,
+      aJob.mViewPort.maxDepth,
+    };
+    
     mRenderer->mD3DDeviceContext->RSSetViewports(1, &viewport);
-    mRenderer->mD3DDeviceContext->OMSetRenderTargets(1, &mMainRenderTargetView, nullptr);
-    mRenderer->mD3DDeviceContext->ClearRenderTargetView(mMainRenderTargetView, color.data());
+    mRenderer->mD3DDeviceContext->OMSetRenderTargets(1, &mRenderer->mMainRenderTargetView, nullptr);
+    mRenderer->mD3DDeviceContext->ClearRenderTargetView(mRenderer->mMainRenderTargetView, clearColor);
   }
   void DX11Renderer::CommandVisitor::operator()(BindVertexBufferCommand & aJob)
   {
